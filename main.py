@@ -178,26 +178,41 @@ async def upload_file(
 
     file_size = 0
 
-    async with aiofiles.open(file_location, "wb") as buffer:
-        while chunk := await file.read(1024 * 1024):  # Read file in chunks of 1MB
-            SAVE_PROGRESS[id] = ("running", file_size, total_size)
-            file_size += len(chunk)
-            if file_size > MAX_FILE_SIZE:
-                await buffer.close()
-                file_location.unlink()  # Delete the partially written file
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"File size exceeds {MAX_FILE_SIZE} bytes limit",
-                )
-            await buffer.write(chunk)
+    try:
+        async with aiofiles.open(file_location, "wb") as buffer:
+            while chunk := await file.read(1024 * 1024):  # Read file in chunks of 1MB
+                SAVE_PROGRESS[id] = ("running", file_size, total_size)
+                file_size += len(chunk)
+                if file_size > MAX_FILE_SIZE:
+                    await buffer.close()
+                    file_location.unlink()  # Delete the partially written file
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"File size exceeds {MAX_FILE_SIZE} bytes limit",
+                    )
+                await buffer.write(chunk)
 
-    SAVE_PROGRESS[id] = ("completed", file_size, file_size)
+        SAVE_PROGRESS[id] = ("completed", file_size, file_size)
 
-    asyncio.create_task(
-        start_file_uploader(file_location, id, path, file.filename, file_size)
-    )
+        # Start upload with improved error handling
+        asyncio.create_task(
+            start_file_uploader(file_location, id, path, file.filename, file_size)
+        )
 
-    return JSONResponse({"id": id, "status": "ok"})
+        return JSONResponse({"id": id, "status": "ok"})
+        
+    except Exception as e:
+        SAVE_PROGRESS[id] = ("error", file_size, total_size)
+        logger.error(f"Upload error for {file.filename}: {e}")
+        
+        # Clean up file on error
+        try:
+            if file_location.exists():
+                file_location.unlink()
+        except:
+            pass
+            
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/getSaveProgress")
@@ -249,6 +264,28 @@ async def cancel_upload(request: Request):
     STOP_TRANSMISSION.append(data["id"])
     STOP_DOWNLOAD.append(data["id"])
     return JSONResponse({"status": "ok"})
+
+
+# Add new API endpoint for bulk import progress
+@app.post("/api/getBulkImportProgress")
+async def get_bulk_import_progress(request: Request):
+    from utils.bot_mode import BULK_IMPORT_PROGRESS
+
+    data = await request.json()
+
+    if data["password"] != ADMIN_PASSWORD:
+        return JSONResponse({"status": "Invalid password"})
+
+    try:
+        import_id = data["id"]
+        progress = BULK_IMPORT_PROGRESS.get(import_id)
+        if progress:
+            return JSONResponse({"status": "ok", "data": progress})
+        else:
+            return JSONResponse({"status": "not found"})
+    except Exception as e:
+        logger.error(f"Error getting bulk import progress: {e}")
+        return JSONResponse({"status": "error", "message": str(e)})
 
 
 @app.post("/api/renameFileFolder")
