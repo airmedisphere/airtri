@@ -266,7 +266,7 @@ async def cancel_upload(request: Request):
     return JSONResponse({"status": "ok"})
 
 
-# Add new API endpoint for bulk import progress
+# Enhanced API endpoint for bulk import progress with better tracking
 @app.post("/api/getBulkImportProgress")
 async def get_bulk_import_progress(request: Request):
     from utils.bot_mode import BULK_IMPORT_PROGRESS
@@ -280,7 +280,19 @@ async def get_bulk_import_progress(request: Request):
         import_id = data["id"]
         progress = BULK_IMPORT_PROGRESS.get(import_id)
         if progress:
-            return JSONResponse({"status": "ok", "data": progress})
+            # Enhanced progress data with more details
+            enhanced_progress = {
+                'total': progress['total'],
+                'imported': progress['imported'],
+                'skipped': progress['skipped'],
+                'errors': progress['errors'],
+                'current_message_id': progress.get('current_message_id', 0),
+                'status': progress['status'],
+                'type': progress.get('type', 'bulk'),  # 'bulk' or 'fast'
+                'progress_text': f"{progress['imported'] + progress['skipped'] + progress['errors']}/{progress['total']}",
+                'percentage': ((progress['imported'] + progress['skipped'] + progress['errors']) / progress['total'] * 100) if progress['total'] > 0 else 0
+            }
+            return JSONResponse({"status": "ok", "data": enhanced_progress})
         else:
             return JSONResponse({"status": "not found"})
     except Exception as e:
@@ -449,3 +461,21 @@ async def getFolderShareAuth(request: Request):
         return JSONResponse({"status": "ok", "auth": auth})
     except:
         return JSONResponse({"status": "not found"})
+
+
+# New API endpoint for client statistics
+@app.post("/api/getClientStats")
+async def get_client_stats(request: Request):
+    from utils.clients import get_client_stats
+
+    data = await request.json()
+
+    if data["password"] != ADMIN_PASSWORD:
+        return JSONResponse({"status": "Invalid password"})
+
+    try:
+        stats = await get_client_stats()
+        return JSONResponse({"status": "ok", "data": stats})
+    except Exception as e:
+        logger.error(f"Error getting client stats: {e}")
+        return JSONResponse({"status": "error", "message": str(e)})

@@ -18,12 +18,15 @@ You can use this bot to upload files to your TG Drive website directly instead o
 /current_folder - Check current folder
 /create_folder - Create a new folder in current directory
 /bulk_import - Import files in bulk from Telegram channel/group
+/fast_import - Fast import from channels where bot is admin
 
 📤 **How To Upload Files:** Send a file to this bot and it will be uploaded to your TG Drive website. You can also set a folder for file uploads using /set_folder command.
 
 📁 **How To Create Folders:** Use /create_folder command to create new folders in your current directory.
 
 📦 **How To Bulk Import:** Use /bulk_import command to import multiple files from a Telegram channel/group by providing a range of message links.
+
+⚡ **How To Fast Import:** Use /fast_import command for channels where the bot is admin - no file copying needed!
 
 Read more about [TG Drive's Bot Mode](https://github.com/TechShreyash/TGDrive#tg-drives-bot-mode)
 """
@@ -93,6 +96,248 @@ async def start_handler(client: Client, message: Message):
 
 
 @main_bot.on_message(
+    filters.command("fast_import")
+    & filters.private
+    & filters.user(config.TELEGRAM_ADMIN_IDS),
+)
+async def fast_import_handler(client: Client, message: Message):
+    """
+    Handles the /fast_import command for channels where bot is admin.
+    This is much faster as it doesn't need to copy files.
+    """
+    global BOT_MODE, DRIVE_DATA
+
+    # Check if there's already a pending ask for this chat to prevent re-triggering
+    if message.chat.id in _pending_requests:
+        await message.reply_text("I'm already waiting for your input. Please provide the required information or /cancel.")
+        return 
+
+    # Check if current folder is set
+    if not BOT_MODE.current_folder:
+        await message.reply_text(
+            "❌ **Error:** No current folder set. Please use /set_folder to set a folder first before fast importing files."
+        )
+        return
+
+    await message.reply_text(
+        "⚡ **Fast Import Files**\n\n"
+        "This feature allows you to quickly import files from channels where this bot is admin.\n"
+        "**No file copying needed - much faster!**\n\n"
+        "**Requirements:**\n"
+        "• Bot must be admin in the source channel\n"
+        "• Channel must be accessible to the bot\n\n"
+        "**How to use:**\n"
+        "1. Get the link of the first file you want to import\n"
+        "2. Get the link of the last file you want to import\n"
+        "3. I'll import all files between these messages instantly\n\n"
+        "**Example:**\n"
+        "From: `https://t.me/YourChannel/100`\n"
+        "To: `https://t.me/YourChannel/200`\n\n"
+        "**Maximum:** Up to 2,000 files per fast import.\n\n"
+        "Let's start! Send /cancel to cancel anytime."
+    )
+
+    # Get the starting link
+    try:
+        start_link_msg = await manual_ask(
+            client=client,
+            chat_id=message.chat.id,
+            text=(
+                "📎 **Step 1/2: Starting Link**\n\n"
+                "Please send the Telegram link of the **first file** you want to import.\n\n"
+                "**Format:** `https://t.me/channel_name/message_id`\n\n"
+                "Send /cancel to cancel"
+            ),
+            timeout=300,  # 5 minutes timeout
+            filters=filters.text,
+        )
+    except asyncio.TimeoutError:
+        await message.reply_text("⏰ **Timeout**\n\nFast import cancelled. Use /fast_import to try again.")
+        return
+
+    if start_link_msg.text.lower() == "/cancel":
+        await message.reply_text("❌ **Cancelled**\n\nFast import cancelled.")
+        return
+
+    start_link = start_link_msg.text.strip()
+    
+    # Validate and parse the starting link
+    start_parsed = parse_telegram_link(start_link)
+    if not start_parsed:
+        await message.reply_text(
+            "❌ **Invalid Link Format**\n\n"
+            "Please provide a valid Telegram link in the format:\n"
+            "`https://t.me/channel_name/message_id`\n\n"
+            "Use /fast_import to try again."
+        )
+        return
+
+    # Get the ending link
+    try:
+        end_link_msg = await manual_ask(
+            client=client,
+            chat_id=message.chat.id,
+            text=(
+                "📎 **Step 2/2: Ending Link**\n\n"
+                "Please send the Telegram link of the **last file** you want to import.\n\n"
+                "**Format:** `https://t.me/channel_name/message_id`\n\n"
+                f"**Starting from:** {start_parsed['channel']}/{start_parsed['message_id']}\n\n"
+                "Send /cancel to cancel"
+            ),
+            timeout=300,  # 5 minutes timeout
+            filters=filters.text,
+        )
+    except asyncio.TimeoutError:
+        await message.reply_text("⏰ **Timeout**\n\nFast import cancelled. Use /fast_import to try again.")
+        return
+
+    if end_link_msg.text.lower() == "/cancel":
+        await message.reply_text("❌ **Cancelled**\n\nFast import cancelled.")
+        return
+
+    end_link = end_link_msg.text.strip()
+    
+    # Validate and parse the ending link
+    end_parsed = parse_telegram_link(end_link)
+    if not end_parsed:
+        await message.reply_text(
+            "❌ **Invalid Link Format**\n\n"
+            "Please provide a valid Telegram link in the format:\n"
+            "`https://t.me/channel_name/message_id`\n\n"
+            "Use /fast_import to try again."
+        )
+        return
+
+    # Validate that both links are from the same channel
+    if start_parsed['channel'] != end_parsed['channel']:
+        await message.reply_text(
+            "❌ **Channel Mismatch**\n\n"
+            "Both links must be from the same channel or group.\n\n"
+            f"**Starting link:** {start_parsed['channel']}\n"
+            f"**Ending link:** {end_parsed['channel']}\n\n"
+            "Use /fast_import to try again."
+        )
+        return
+
+    # Validate message ID range
+    start_id = start_parsed['message_id']
+    end_id = end_parsed['message_id']
+    
+    if start_id >= end_id:
+        await message.reply_text(
+            "❌ **Invalid Range**\n\n"
+            "The starting message ID must be less than the ending message ID.\n\n"
+            f"**Starting ID:** {start_id}\n"
+            f"**Ending ID:** {end_id}\n\n"
+            "Use /fast_import to try again."
+        )
+        return
+
+    # Calculate the number of files to import
+    file_count = end_id - start_id + 1
+    
+    # Higher limit for fast import since no copying is needed
+    if file_count > 2000:
+        await message.reply_text(
+            "❌ **Too Many Files**\n\n"
+            f"You're trying to import {file_count:,} files. The maximum allowed is 2,000 files per fast import.\n\n"
+            "**Suggestions:**\n"
+            "• Split your import into smaller ranges\n"
+            "• Import in batches of 2,000 or fewer files\n\n"
+            "Please reduce the range and try again."
+        )
+        return
+
+    # Check if bot is admin in the channel
+    try:
+        channel = await client.get_chat(start_parsed['channel'])
+        bot_member = await client.get_chat_member(channel.id, "me")
+        if not bot_member.privileges or not bot_member.privileges.can_post_messages:
+            await message.reply_text(
+                "❌ **Bot Not Admin**\n\n"
+                f"The bot is not an admin in `{start_parsed['channel']}` or doesn't have sufficient permissions.\n\n"
+                "**Required permissions:**\n"
+                "• Post messages\n"
+                "• Delete messages (recommended)\n\n"
+                "Please add the bot as admin and try again."
+            )
+            return
+    except Exception as e:
+        await message.reply_text(
+            f"❌ **Channel Access Error**\n\n"
+            f"Could not access channel `{start_parsed['channel']}`.\n\n"
+            f"**Error:** {str(e)}\n\n"
+            "Please ensure:\n"
+            "1. The channel exists and is accessible\n"
+            "2. The bot is added as admin\n"
+            "3. The channel username is correct"
+        )
+        return
+
+    # Confirm the import
+    confirmation_msg = await message.reply_text(
+        f"⚡ **Confirm Fast Import**\n\n"
+        f"**Channel:** {start_parsed['channel']}\n"
+        f"**Range:** {start_id:,} to {end_id:,}\n"
+        f"**Total files:** {file_count:,}\n"
+        f"**Destination folder:** {BOT_MODE.current_folder_name}\n\n"
+        f"**Fast Mode:** ✅ No file copying needed!\n"
+        f"**Estimated time:** ~{file_count // 50 + 1} minutes\n\n"
+        f"Type **YES** to confirm or **NO** to cancel."
+    )
+
+    try:
+        confirm_msg = await manual_ask(
+            client=client,
+            chat_id=message.chat.id,
+            text="Please type **YES** to confirm or **NO** to cancel:",
+            timeout=60,
+            filters=filters.text,
+        )
+    except asyncio.TimeoutError:
+        await message.reply_text("⏰ **Timeout**\n\nFast import cancelled due to timeout.")
+        return
+
+    if confirm_msg.text.upper() not in ["YES", "Y"]:
+        await message.reply_text("❌ **Cancelled**\n\nFast import cancelled by user.")
+        return
+
+    # Start the fast import process
+    import_id = f"fast_{message.chat.id}_{start_id}_{end_id}"
+    BULK_IMPORT_PROGRESS[import_id] = {
+        'total': file_count,
+        'imported': 0,
+        'skipped': 0,
+        'errors': 0,
+        'current_message_id': start_id,
+        'status': 'starting',
+        'type': 'fast'
+    }
+
+    await message.reply_text(
+        f"⚡ **Starting Fast Import**\n\n"
+        f"Importing {file_count:,} files from {start_parsed['channel']}...\n"
+        f"**Fast mode enabled** - no file copying needed!\n\n"
+        f"**Current folder:** {BOT_MODE.current_folder_name}\n\n"
+        f"**Progress:** 0/{file_count:,} (0%)"
+    )
+
+    # Start the fast import task
+    asyncio.create_task(
+        fast_import_files(
+            client, 
+            message.chat.id, 
+            channel.id,
+            start_parsed['channel'], 
+            start_id, 
+            end_id,
+            BOT_MODE.current_folder,
+            import_id
+        )
+    )
+
+
+@main_bot.on_message(
     filters.command("bulk_import")
     & filters.private
     & filters.user(config.TELEGRAM_ADMIN_IDS),
@@ -126,7 +371,8 @@ async def bulk_import_handler(client: Client, message: Message):
         "From: `https://t.me/ParmarEnglishPyqSeriesPart1/3`\n"
         "To: `https://t.me/ParmarEnglishPyqSeriesPart1/79`\n\n"
         "**Note:** Both links must be from the same channel/group.\n"
-        "**Maximum:** Up to 1,000 files per bulk import.\n\n"
+        "**Maximum:** Up to 500 files per bulk import.\n\n"
+        "💡 **Tip:** Use /fast_import if the bot is admin in the source channel for much faster imports!\n\n"
         "Let's start! Send /cancel to cancel anytime."
     )
 
@@ -229,14 +475,15 @@ async def bulk_import_handler(client: Client, message: Message):
     # Calculate the number of files to import
     file_count = end_id - start_id + 1
     
-    # Reduced limit to 1000 files for better performance
-    if file_count > 1000:
+    # Reduced limit for regular bulk import due to copying overhead
+    if file_count > 500:
         await message.reply_text(
             "❌ **Too Many Files**\n\n"
-            f"You're trying to import {file_count:,} files. The maximum allowed is 1,000 files per bulk import.\n\n"
+            f"You're trying to import {file_count:,} files. The maximum allowed is 500 files per bulk import.\n\n"
             "**Suggestions:**\n"
             "• Split your import into smaller ranges\n"
-            "• Import in batches of 1,000 or fewer files\n\n"
+            "• Use /fast_import if the bot is admin in the source channel\n"
+            "• Import in batches of 500 or fewer files\n\n"
             "Please reduce the range and try again."
         )
         return
@@ -246,7 +493,8 @@ async def bulk_import_handler(client: Client, message: Message):
     if file_count > 100:
         warning_message = (
             f"⚠️ **Large Import Warning:** You're importing {file_count:,} files. "
-            f"This may take a significant amount of time (estimated: {file_count // 10 + 1} minutes).\n\n"
+            f"This may take a significant amount of time (estimated: {file_count // 5 + 1} minutes).\n\n"
+            f"💡 **Tip:** Use /fast_import if the bot is admin in the source channel for much faster imports!\n\n"
         )
 
     # Confirm the import
@@ -257,7 +505,7 @@ async def bulk_import_handler(client: Client, message: Message):
         f"**Total files:** {file_count:,}\n"
         f"**Destination folder:** {BOT_MODE.current_folder_name}\n\n"
         f"{warning_message}"
-        f"**Important:** This will import {file_count:,} files. Make sure you have enough storage space.\n\n"
+        f"**Important:** This will copy {file_count:,} files to your storage channel.\n\n"
         f"Type **YES** to confirm or **NO** to cancel."
     )
 
@@ -285,7 +533,8 @@ async def bulk_import_handler(client: Client, message: Message):
         'skipped': 0,
         'errors': 0,
         'current_message_id': start_id,
-        'status': 'starting'
+        'status': 'starting',
+        'type': 'bulk'
     }
 
     await message.reply_text(
@@ -335,6 +584,128 @@ def parse_telegram_link(link):
     return None
 
 
+async def fast_import_files(client, user_chat_id, channel_id, channel_name, start_id, end_id, destination_folder, import_id):
+    """
+    Fast import files from a channel where bot is admin - no copying needed.
+    """
+    global DRIVE_DATA, BULK_IMPORT_PROGRESS
+    
+    try:
+        total_files = end_id - start_id + 1
+        progress = BULK_IMPORT_PROGRESS[import_id]
+        progress['status'] = 'running'
+        
+        # Send initial status
+        status_msg = await client.send_message(
+            user_chat_id,
+            f"⚡ **Fast Import Progress**\n\n"
+            f"**Total:** {total_files:,}\n"
+            f"**Imported:** 0\n"
+            f"**Skipped:** 0\n"
+            f"**Errors:** 0\n\n"
+            f"**Progress:** 0/{total_files:,} (0%)\n"
+            f"**Status:** Starting fast import..."
+        )
+
+        # Process files in larger batches since no copying is needed
+        batch_size = 20  # Larger batch size for fast import
+        processed_count = 0
+        
+        for message_id in range(start_id, end_id + 1):
+            progress['current_message_id'] = message_id
+            
+            try:
+                # Get the message directly from the channel
+                source_message = await client.get_messages(channel_id, message_id)
+                
+                if not source_message or source_message.empty:
+                    progress['skipped'] += 1
+                    continue
+
+                # Check if message has media
+                media = (
+                    source_message.document
+                    or source_message.video
+                    or source_message.audio
+                    or source_message.photo
+                    or source_message.sticker
+                )
+
+                if not media:
+                    progress['skipped'] += 1
+                    continue
+
+                # Add file to drive data directly (no copying needed)
+                DRIVE_DATA.new_file(
+                    destination_folder,
+                    media.file_name or f"file_{message_id}",
+                    message_id,  # Use original message ID
+                    media.file_size or 0,
+                )
+
+                progress['imported'] += 1
+                logger.info(f"Fast imported file from message {message_id}: {media.file_name}")
+                
+                processed_count += 1
+
+                # Update status every 20 files or at the end
+                if processed_count % 20 == 0 or message_id == end_id:
+                    try:
+                        total_processed = progress['imported'] + progress['skipped'] + progress['errors']
+                        progress_percentage = (total_processed / total_files) * 100
+                        await status_msg.edit_text(
+                            f"⚡ **Fast Import Progress**\n\n"
+                            f"**Total:** {total_files:,}\n"
+                            f"**Imported:** {progress['imported']:,}\n"
+                            f"**Skipped:** {progress['skipped']:,}\n"
+                            f"**Errors:** {progress['errors']:,}\n\n"
+                            f"**Progress:** {total_processed:,}/{total_files:,} ({progress_percentage:.1f}%)\n"
+                            f"**Current:** Processing message {message_id:,}\n"
+                            f"**Speed:** ⚡ Fast mode (no copying)"
+                        )
+                    except:
+                        pass  # Ignore edit errors
+
+                # Small delay to prevent overwhelming the API
+                if processed_count % batch_size == 0:
+                    await asyncio.sleep(0.5)
+
+            except Exception as e:
+                logger.error(f"Error processing message {message_id}: {e}")
+                progress['errors'] += 1
+
+        # Send final status
+        progress['status'] = 'completed'
+        success_rate = (progress['imported'] / total_files * 100) if total_files > 0 else 0
+        
+        await client.send_message(
+            user_chat_id,
+            f"✅ **Fast Import Completed**\n\n"
+            f"**Total files processed:** {total_files:,}\n"
+            f"**Successfully imported:** {progress['imported']:,}\n"
+            f"**Skipped (no media):** {progress['skipped']:,}\n"
+            f"**Errors:** {progress['errors']:,}\n\n"
+            f"**Success rate:** {success_rate:.1f}%\n"
+            f"**Destination folder:** {BOT_MODE.current_folder_name}\n"
+            f"**Import type:** ⚡ Fast (no copying)\n\n"
+            f"All imported files are now available on your TG Drive website! 🎉"
+        )
+
+    except Exception as e:
+        logger.error(f"Fast import failed: {e}")
+        await client.send_message(
+            user_chat_id,
+            f"❌ **Fast Import Failed**\n\n"
+            f"An unexpected error occurred during the fast import process.\n\n"
+            f"**Error:** {str(e)}\n\n"
+            f"Please try again or contact support if the issue persists."
+        )
+    finally:
+        # Clean up progress tracking
+        if import_id in BULK_IMPORT_PROGRESS:
+            del BULK_IMPORT_PROGRESS[import_id]
+
+
 async def bulk_import_files(client, user_chat_id, channel_name, start_id, end_id, destination_folder, import_id):
     """
     Import files in bulk from a Telegram channel/group with improved progress tracking.
@@ -375,7 +746,7 @@ async def bulk_import_files(client, user_chat_id, channel_name, start_id, end_id
         )
 
         # Process files in smaller batches to avoid overwhelming the system
-        batch_size = 5  # Process 5 files at a time
+        batch_size = 3  # Reduced batch size for regular import
         current_batch = []
         
         for message_id in range(start_id, end_id + 1):
@@ -417,7 +788,7 @@ async def bulk_import_files(client, user_chat_id, channel_name, start_id, end_id
                     current_batch = []
                     
                     # Add delay between batches to avoid rate limiting
-                    await asyncio.sleep(2)
+                    await asyncio.sleep(3)
 
                 # Update status every 10 files or at the end
                 processed = progress['imported'] + progress['skipped'] + progress['errors']
@@ -476,7 +847,7 @@ async def process_batch(batch, destination_folder, progress, client, storage_cha
     global DRIVE_DATA
     
     # Use semaphore to limit concurrent operations
-    semaphore = asyncio.Semaphore(2)  # Max 2 concurrent uploads per batch
+    semaphore = asyncio.Semaphore(1)  # Reduced to 1 for better rate limiting
     
     async def process_single_file(message_id, source_message, media):
         async with semaphore:
@@ -504,20 +875,16 @@ async def process_batch(batch, destination_folder, progress, client, storage_cha
                 progress['imported'] += 1
                 logger.info(f"Imported file from message {message_id}: {copied_media.file_name}")
                 
-                # Small delay to avoid overwhelming the API
-                await asyncio.sleep(0.5)
+                # Delay to avoid overwhelming the API
+                await asyncio.sleep(1)
 
             except Exception as e:
                 logger.error(f"Error copying message {message_id}: {e}")
                 progress['errors'] += 1
 
-    # Process all files in the batch concurrently
-    tasks = [
-        process_single_file(message_id, source_message, media)
-        for message_id, source_message, media in batch
-    ]
-    
-    await asyncio.gather(*tasks, return_exceptions=True)
+    # Process all files in the batch sequentially to avoid rate limits
+    for message_id, source_message, media in batch:
+        await process_single_file(message_id, source_message, media)
 
 
 @main_bot.on_message(
@@ -908,7 +1275,8 @@ async def current_folder_handler(client: Client, message: Message):
             f"• Send files to upload them here\n"
             f"• /create_folder - Create new folders\n"
             f"• /set_folder - Change current folder\n"
-            f"• /bulk_import - Import files in bulk"
+            f"• /bulk_import - Import files in bulk\n"
+            f"• /fast_import - Fast import from admin channels"
         )
     else:
         await message.reply_text(
@@ -952,7 +1320,8 @@ async def file_handler(client: Client, message: Message):
             "1. Use /set_folder to choose a folder\n"
             "2. Send files to upload them\n"
             "3. Use /create_folder to create new folders\n"
-            "4. Use /bulk_import to import files in bulk"
+            "4. Use /bulk_import to import files in bulk\n"
+            "5. Use /fast_import for channels where bot is admin"
         )
         return
 
@@ -987,6 +1356,7 @@ async def file_handler(client: Client, message: Message):
 • Use /create_folder to create new folders
 • Use /set_folder to change location
 • Use /bulk_import to import files in bulk
+• Use /fast_import for channels where bot is admin
 """
     )
 
