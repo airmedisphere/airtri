@@ -479,3 +479,41 @@ async def get_client_stats(request: Request):
     except Exception as e:
         logger.error(f"Error getting client stats: {e}")
         return JSONResponse({"status": "error", "message": str(e)})
+
+
+# New API endpoint for streaming optimization
+@app.post("/api/getStreamingStats")
+async def get_streaming_stats(request: Request):
+    """Get streaming performance statistics"""
+    data = await request.json()
+
+    if data["password"] != ADMIN_PASSWORD:
+        return JSONResponse({"status": "Invalid password"})
+
+    try:
+        # Get connection info from request headers
+        connection_type = request.headers.get("Connection-Type", "unknown")
+        save_data = request.headers.get("Save-Data", "off") == "on"
+        user_agent = request.headers.get("User-Agent", "")
+        
+        # Determine if mobile
+        is_mobile = any(mobile in user_agent.lower() for mobile in ['mobile', 'android', 'iphone', 'ipad'])
+        
+        # Recommend quality based on connection
+        recommended_quality = "medium"
+        if save_data or "slow" in connection_type.lower():
+            recommended_quality = "low"
+        elif "fast" in connection_type.lower() and not is_mobile:
+            recommended_quality = "high"
+        
+        stats = {
+            "recommended_quality": recommended_quality,
+            "is_mobile": is_mobile,
+            "save_data_enabled": save_data,
+            "connection_type": connection_type
+        }
+        
+        return JSONResponse({"status": "ok", "data": stats})
+    except Exception as e:
+        logger.error(f"Error getting streaming stats: {e}")
+        return JSONResponse({"status": "error", "message": str(e)})

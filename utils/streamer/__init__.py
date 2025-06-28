@@ -29,6 +29,9 @@ async def media_streamer(channel: int, message_id: int, file_name: str, request)
     file_id = await tg_connect.get_file_properties(channel, message_id)
     file_size = file_id.file_size
 
+    # Check for quality parameter for adaptive streaming
+    quality = request.query_params.get("quality", "auto")
+    
     if range_header:
         from_bytes, until_bytes = range_header.replace("bytes=", "").split("-")
         from_bytes = int(from_bytes)
@@ -44,7 +47,8 @@ async def media_streamer(channel: int, message_id: int, file_name: str, request)
             headers={"Content-Range": f"bytes */{file_size}"},
         )
 
-    chunk_size = 1024 * 1024
+    # Adaptive chunk size based on connection speed and quality
+    chunk_size = get_adaptive_chunk_size(request, quality)
     until_bytes = min(until_bytes, file_size - 1)
 
     offset = from_bytes - (from_bytes % chunk_size)
@@ -53,8 +57,10 @@ async def media_streamer(channel: int, message_id: int, file_name: str, request)
 
     req_length = until_bytes - from_bytes + 1
     part_count = math.ceil(until_bytes / chunk_size) - math.floor(offset / chunk_size)
-    body = tg_connect.yield_file(
-        file_id, offset, first_part_cut, last_part_cut, part_count, chunk_size
+    
+    # Use adaptive streaming for better performance
+    body = tg_connect.yield_file_adaptive(
+        file_id, offset, first_part_cut, last_part_cut, part_count, chunk_size, quality
     )
 
     disposition = "attachment"
@@ -68,15 +74,46 @@ async def media_streamer(channel: int, message_id: int, file_name: str, request)
     ):
         disposition = "inline"
 
+    # Add caching headers for better performance
+    cache_headers = {
+        "Cache-Control": "public, max-age=3600",
+        "ETag": f'"{message_id}-{file_size}"',
+        "Accept-Ranges": "bytes",
+    }
+
+    response_headers = {
+        "Content-Type": f"{mime_type}",
+        "Content-Range": f"bytes {from_bytes}-{until_bytes}/{file_size}",
+        "Content-Length": str(req_length),
+        "Content-Disposition": f'{disposition}; filename="{quote(file_name)}"',
+        **cache_headers
+    }
+
     return StreamingResponse(
         status_code=206 if range_header else 200,
         content=body,
-        headers={
-            "Content-Type": f"{mime_type}",
-            "Content-Range": f"bytes {from_bytes}-{until_bytes}/{file_size}",
-            "Content-Length": str(req_length),
-            "Content-Disposition": f'{disposition}; filename="{quote(file_name)}"',
-            "Accept-Ranges": "bytes",
-        },
+        headers=response_headers,
         media_type=mime_type,
     )
+
+
+def get_adaptive_chunk_size(request, quality):
+    """Determine optimal chunk size based on quality and connection"""
+    # Base chunk sizes for different qualities
+    chunk_sizes = {
+        "low": 256 * 1024,      # 256KB for slow connections
+        "medium": 512 * 1024,   # 512KB for medium connections
+        "high": 1024 * 1024,    # 1MB for fast connections
+        "auto": 512 * 1024      # Default adaptive size
+    }
+    
+    # Check for connection speed hints from headers
+    connection_type = request.headers.get("Connection-Type", "").lower()
+    save_data = request.headers.get("Save-Data", "").lower() == "on"
+    
+    if save_data or "slow" in connection_type:
+        return chunk_sizes["low"]
+    elif quality in chunk_sizes:
+        return chunk_sizes[quality]
+    else:
+        return chunk_sizes["auto"]
