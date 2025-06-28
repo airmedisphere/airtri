@@ -62,6 +62,10 @@ function openMoreButton(div) {
             moreDiv.querySelector(`#folder-share-${id}`).addEventListener('click', shareFolder)
         }
         catch { }
+        try {
+            moreDiv.querySelector(`#transcode-${id}`).addEventListener('click', transcodeVideo)
+        }
+        catch { }
     }
     else {
         moreDiv.querySelector(`#restore-${id}`).addEventListener('click', restoreFileFolder)
@@ -158,6 +162,23 @@ function copyFileFolder() {
     
     // Show copy modal
     showCopyModal(itemPath, itemName)
+}
+
+// Transcode Video Start
+function transcodeVideo() {
+    const id = this.getAttribute('id').split('-')[1]
+    const itemPath = document.getElementById(`more-option-${id}`).getAttribute('data-path') + '/' + id
+    const itemName = document.getElementById(`more-option-${id}`).getAttribute('data-name')
+    
+    // Close the more options menu first
+    closeMoreBtnFocus.call(this.parentElement.querySelector('.more-options-focus'))
+    
+    // Show transcode modal
+    if (window.showTranscodeModal) {
+        window.showTranscodeModal(itemPath, itemName)
+    } else {
+        alert('Transcoding feature not available')
+    }
 }
 
 async function trashFileFolder() {

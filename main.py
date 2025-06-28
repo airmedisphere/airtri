@@ -15,6 +15,13 @@ from utils.extra import auto_ping_website, convert_class_to_dict, reset_cache_di
 from utils.streamer import media_streamer
 from utils.uploader import start_file_uploader
 from utils.logger import Logger
+from utils.transcoder import (
+    transcoder, 
+    start_video_transcode, 
+    get_transcode_progress, 
+    cancel_transcode,
+    TRANSCODE_PROGRESS
+)
 import urllib.parse
 
 
@@ -516,4 +523,156 @@ async def get_streaming_stats(request: Request):
         return JSONResponse({"status": "ok", "data": stats})
     except Exception as e:
         logger.error(f"Error getting streaming stats: {e}")
+        return JSONResponse({"status": "error", "message": str(e)})
+
+
+# Transcoding API endpoints
+@app.post("/api/getTranscodeFormats")
+async def get_transcode_formats(request: Request):
+    """Get supported transcoding formats"""
+    data = await request.json()
+
+    if data["password"] != ADMIN_PASSWORD:
+        return JSONResponse({"status": "Invalid password"})
+
+    try:
+        formats = transcoder.get_supported_formats()
+        qualities = transcoder.get_quality_presets()
+        speed_presets = transcoder.get_speed_presets()
+        
+        return JSONResponse({
+            "status": "ok", 
+            "data": {
+                "formats": formats,
+                "qualities": qualities,
+                "speed_presets": speed_presets
+            }
+        })
+    except Exception as e:
+        logger.error(f"Error getting transcode formats: {e}")
+        return JSONResponse({"status": "error", "message": str(e)})
+
+
+@app.post("/api/getVideoInfo")
+async def get_video_info(request: Request):
+    """Get video file information"""
+    data = await request.json()
+
+    if data["password"] != ADMIN_PASSWORD:
+        return JSONResponse({"status": "Invalid password"})
+
+    try:
+        from utils.directoryHandler import DRIVE_DATA
+        from utils.clients import get_client
+        
+        file_path = data["file_path"]
+        file = DRIVE_DATA.get_file(file_path)
+        
+        # Download file temporarily to get info
+        client = get_client()
+        message = await client.get_messages(STORAGE_CHANNEL, int(file.file_id))
+        
+        if not message or (not message.video and not message.document):
+            return JSONResponse({"status": "error", "message": "File not found or not a video"})
+        
+        # Download to temporary location
+        temp_file = await message.download(file_name=f"temp_info_{getRandomID()}")
+        
+        try:
+            # Get video information
+            video_info = await transcoder.get_video_info(temp_file)
+            return JSONResponse({"status": "ok", "data": video_info})
+        finally:
+            # Clean up temporary file
+            if os.path.exists(temp_file):
+                os.unlink(temp_file)
+                
+    except Exception as e:
+        logger.error(f"Error getting video info: {e}")
+        return JSONResponse({"status": "error", "message": str(e)})
+
+
+@app.post("/api/startTranscode")
+async def start_transcode(request: Request):
+    """Start video transcoding"""
+    data = await request.json()
+
+    if data["password"] != ADMIN_PASSWORD:
+        return JSONResponse({"status": "Invalid password"})
+
+    try:
+        from utils.directoryHandler import DRIVE_DATA
+        
+        file_path = data["file_path"]
+        output_format = data["output_format"]
+        quality = data["quality"]
+        speed_preset = data.get("speed_preset", "fast")
+        custom_settings = data.get("custom_settings", {})
+        
+        # Get file information
+        file = DRIVE_DATA.get_file(file_path)
+        
+        # Generate transcode ID
+        transcode_id = getRandomID()
+        
+        # Start transcoding process
+        asyncio.create_task(
+            start_video_transcode(
+                file_path,
+                file.file_id,
+                output_format,
+                quality,
+                transcode_id,
+                file.path,
+                file.name,
+                custom_settings,
+                speed_preset
+            )
+        )
+        
+        return JSONResponse({"status": "ok", "transcode_id": transcode_id})
+        
+    except Exception as e:
+        logger.error(f"Error starting transcode: {e}")
+        return JSONResponse({"status": "error", "message": str(e)})
+
+
+@app.post("/api/getTranscodeProgress")
+async def get_transcode_progress_api(request: Request):
+    """Get transcoding progress"""
+    data = await request.json()
+
+    if data["password"] != ADMIN_PASSWORD:
+        return JSONResponse({"status": "Invalid password"})
+
+    try:
+        transcode_id = data["transcode_id"]
+        progress = get_transcode_progress(transcode_id)
+        
+        if progress:
+            return JSONResponse({"status": "ok", "data": progress})
+        else:
+            return JSONResponse({"status": "not found"})
+            
+    except Exception as e:
+        logger.error(f"Error getting transcode progress: {e}")
+        return JSONResponse({"status": "error", "message": str(e)})
+
+
+@app.post("/api/cancelTranscode")
+async def cancel_transcode_api(request: Request):
+    """Cancel transcoding"""
+    data = await request.json()
+
+    if data["password"] != ADMIN_PASSWORD:
+        return JSONResponse({"status": "Invalid password"})
+
+    try:
+        transcode_id = data["transcode_id"]
+        cancel_transcode(transcode_id)
+        
+        return JSONResponse({"status": "ok"})
+        
+    except Exception as e:
+        logger.error(f"Error cancelling transcode: {e}")
         return JSONResponse({"status": "error", "message": str(e)})
