@@ -23,6 +23,7 @@ from utils.transcoder import (
     TRANSCODE_PROGRESS
 )
 import urllib.parse
+import os
 
 
 # Startup Event
@@ -675,4 +676,55 @@ async def cancel_transcode_api(request: Request):
         
     except Exception as e:
         logger.error(f"Error cancelling transcode: {e}")
+        return JSONResponse({"status": "error", "message": str(e)})
+
+
+@app.post("/api/getAvailableQualities")
+async def get_available_qualities(request: Request):
+    """Get available transcoded qualities for a video"""
+    data = await request.json()
+
+    if data["password"] != ADMIN_PASSWORD:
+        return JSONResponse({"status": "Invalid password"})
+
+    try:
+        from utils.directoryHandler import DRIVE_DATA
+        
+        video_path = data["video_path"]
+        base_name = data.get("base_name", "")
+        folder_path = data.get("folder_path", "/")
+        
+        # Get folder contents
+        folder_data = DRIVE_DATA.get_directory(folder_path)
+        available_qualities = []
+        
+        # Look for transcoded versions
+        for item_id, item in folder_data.contents.items():
+            if item.type == "file":
+                filename = item.name
+                
+                # Check if this is a transcoded version of the base video
+                if base_name in filename and filename != base_name:
+                    # Extract quality and format from filename
+                    import re
+                    pattern = rf"{re.escape(base_name)}_(\d+p)_(\w+)\."
+                    match = re.search(pattern, filename)
+                    
+                    if match:
+                        quality = match.group(1)
+                        format_type = match.group(2)
+                        
+                        available_qualities.append({
+                            "quality": quality,
+                            "format": format_type,
+                            "path": item.path + "/" + item.id,
+                            "type": "transcoded",
+                            "size": item.size,
+                            "filename": filename
+                        })
+        
+        return JSONResponse({"status": "ok", "qualities": available_qualities})
+        
+    except Exception as e:
+        logger.error(f"Error getting available qualities: {e}")
         return JSONResponse({"status": "error", "message": str(e)})
