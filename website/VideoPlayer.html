@@ -8,6 +8,11 @@
 
     <link href="//vjs.zencdn.net/8.3.0/video-js.min.css" rel="stylesheet">
     <script src="//vjs.zencdn.net/8.3.0/video.min.js"></script>
+    <!-- HLS.js for better streaming support -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <!-- Video.js HLS plugin -->
+    <script src="https://vhs.videojs.com/latest/videojs-http-streaming.min.js"></script>
+    
     <style>
         * {
             margin: 0;
@@ -42,17 +47,24 @@
             height: auto !important;
         }
 
-        .quality-selector {
+        .streaming-controls {
             position: absolute;
             top: 10px;
             right: 10px;
             z-index: 1000;
-            background: rgba(0, 0, 0, 0.8);
-            border-radius: 6px;
-            padding: 8px;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
         }
 
-        .quality-selector select {
+        .control-panel {
+            background: rgba(0, 0, 0, 0.8);
+            border-radius: 6px;
+            padding: 6px 8px;
+            backdrop-filter: blur(10px);
+        }
+
+        .control-panel select, .control-panel button {
             background: transparent;
             color: white;
             border: 1px solid rgba(255, 255, 255, 0.3);
@@ -60,11 +72,16 @@
             padding: 4px 8px;
             font-size: 12px;
             cursor: pointer;
+            min-width: 80px;
         }
 
-        .quality-selector select option {
+        .control-panel select option {
             background: #333;
             color: white;
+        }
+
+        .control-panel button:hover {
+            background: rgba(255, 255, 255, 0.1);
         }
 
         .connection-indicator {
@@ -74,12 +91,13 @@
             z-index: 1000;
             background: rgba(0, 0, 0, 0.8);
             color: white;
-            padding: 4px 8px;
-            border-radius: 4px;
+            padding: 6px 10px;
+            border-radius: 6px;
             font-size: 11px;
             display: flex;
             align-items: center;
-            gap: 4px;
+            gap: 6px;
+            backdrop-filter: blur(10px);
         }
 
         .connection-dot {
@@ -87,18 +105,51 @@
             height: 8px;
             border-radius: 50%;
             background: #4caf50;
+            animation: pulse 2s infinite;
         }
 
-        .connection-dot.slow {
-            background: #f44336;
-        }
-
-        .connection-dot.medium {
+        .connection-dot.buffering {
             background: #ff9800;
+            animation: pulse 0.5s infinite;
         }
 
-        .connection-dot.fast {
-            background: #4caf50;
+        .connection-dot.error {
+            background: #f44336;
+            animation: none;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .buffer-info {
+            position: absolute;
+            bottom: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            display: none;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+
+        .speed-indicator {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
         }
 
         .buttons-container {
@@ -131,10 +182,6 @@
             box-shadow: 0 4px 12px rgba(0, 123, 255, 0.4);
         }
 
-        .copy-button:active {
-            transform: translateY(0);
-        }
-
         .open-button {
             padding: 12px 24px;
             font-size: 16px;
@@ -155,34 +202,30 @@
             box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
         }
 
-        .open-button:active {
-            transform: translateY(0);
+        /* Enhanced Video.js Control Bar */
+        .video-js .vjs-control-bar {
+            background: rgba(0, 0, 0, 0.8) !important;
+            backdrop-filter: blur(10px) !important;
+            z-index: 1001 !important;
         }
 
-        .buffer-indicator {
-            position: absolute;
-            bottom: 60px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 8px 12px;
-            border-radius: 6px;
-            font-size: 12px;
-            display: none;
-            z-index: 1000;
+        .video-js .vjs-picture-in-picture-control,
+        .video-js .vjs-fullscreen-control {
+            z-index: 1002 !important;
         }
 
-        .speed-indicator {
-            position: absolute;
-            bottom: 10px;
-            right: 10px;
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 11px;
-            z-index: 1000;
+        /* Optimized buffering indicators */
+        .vjs-loading-spinner {
+            border-color: rgba(0, 123, 255, 0.8) transparent transparent transparent !important;
+            border-width: 3px !important;
+        }
+
+        .vjs-progress-control .vjs-load-progress {
+            background: rgba(0, 123, 255, 0.3) !important;
+        }
+
+        .vjs-progress-control .vjs-play-progress {
+            background: #007bff !important;
         }
 
         /* Mobile Styles */
@@ -195,17 +238,33 @@
                 border-radius: 8px;
             }
 
-            .quality-selector {
+            .streaming-controls {
                 top: 5px;
                 right: 5px;
-                padding: 6px;
+                flex-direction: column;
+                gap: 4px;
+            }
+
+            .control-panel {
+                padding: 4px 6px;
+            }
+
+            .control-panel select, .control-panel button {
+                font-size: 11px;
+                padding: 3px 6px;
+                min-width: 70px;
             }
 
             .connection-indicator {
                 top: 5px;
                 left: 5px;
-                padding: 3px 6px;
+                padding: 4px 8px;
                 font-size: 10px;
+            }
+
+            .speed-indicator {
+                font-size: 10px;
+                padding: 3px 6px;
             }
 
             .buttons-container {
@@ -223,8 +282,29 @@
         }
 
         @media (max-width: 480px) {
-            body {
-                padding: 5px;
+            .streaming-controls {
+                position: relative;
+                top: auto;
+                right: auto;
+                margin: 10px;
+                justify-content: center;
+            }
+
+            .connection-indicator {
+                position: relative;
+                top: auto;
+                left: auto;
+                margin: 5px auto;
+                display: inline-flex;
+            }
+
+            .speed-indicator {
+                position: relative;
+                bottom: auto;
+                left: auto;
+                margin: 5px auto;
+                display: inline-block;
+                text-align: center;
             }
 
             .buttons-container {
@@ -237,77 +317,6 @@
                 max-width: 280px;
                 margin-bottom: 8px;
             }
-
-            .quality-selector {
-                position: relative;
-                top: auto;
-                right: auto;
-                margin: 10px auto;
-                text-align: center;
-            }
-
-            .connection-indicator {
-                position: relative;
-                top: auto;
-                left: auto;
-                margin: 5px auto;
-                display: inline-flex;
-            }
-        }
-
-        /* Landscape mobile */
-        @media (max-width: 768px) and (orientation: landscape) {
-            body {
-                padding: 10px;
-                min-height: 100vh;
-            }
-
-            .video-container {
-                max-height: 70vh;
-            }
-
-            .buttons-container {
-                margin-top: 10px;
-            }
-        }
-
-        /* Video.js responsive adjustments */
-        @media (max-width: 768px) {
-            .video-js .vjs-control-bar {
-                font-size: 14px;
-            }
-
-            .video-js .vjs-button {
-                padding: 0 8px;
-            }
-        }
-
-        /* Loading state */
-        .video-container.loading {
-            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-            background-size: 200% 100%;
-            animation: loading 1.5s infinite;
-        }
-
-        @keyframes loading {
-            0% {
-                background-position: 200% 0;
-            }
-            100% {
-                background-position: -200% 0;
-            }
-        }
-
-        /* Error state */
-        .error-message {
-            color: #dc3545;
-            text-align: center;
-            padding: 20px;
-            background: #f8d7da;
-            border: 1px solid #f5c6cb;
-            border-radius: 8px;
-            margin: 20px 0;
-            max-width: 600px;
         }
 
         /* Success message for copy actions */
@@ -329,51 +338,84 @@
             transform: translateX(0);
         }
 
-        @media (max-width: 480px) {
-            .success-message {
-                top: 10px;
-                right: 10px;
-                left: 10px;
-                text-align: center;
-            }
+        .error-message {
+            color: #dc3545;
+            text-align: center;
+            padding: 20px;
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            border-radius: 8px;
+            margin: 20px 0;
+            max-width: 600px;
         }
 
-        /* Custom video.js styles for better buffering */
-        .vjs-loading-spinner {
-            border-color: rgba(255, 255, 255, 0.8) transparent transparent transparent !important;
+        /* Loading state */
+        .video-container.loading {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
         }
 
-        .vjs-progress-control .vjs-load-progress {
-            background: rgba(255, 255, 255, 0.3) !important;
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
         }
 
-        .vjs-progress-control .vjs-play-progress {
-            background: #007bff !important;
+        /* Streaming optimization indicators */
+        .stream-info {
+            position: absolute;
+            top: 50px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            z-index: 1000;
+            display: none;
+            backdrop-filter: blur(10px);
+        }
+
+        .stream-info.show {
+            display: block;
         }
     </style>
 </head>
 
 <body>
     <div class="video-container" id="video-container">
-        <!-- Quality Selector -->
-        <div class="quality-selector">
-            <select id="quality-select">
-                <option value="auto">Auto Quality</option>
-                <option value="low">Low (256KB chunks)</option>
-                <option value="medium">Medium (512KB chunks)</option>
-                <option value="high">High (1MB chunks)</option>
-            </select>
+        <!-- Streaming Controls -->
+        <div class="streaming-controls">
+            <div class="control-panel">
+                <select id="chunk-size-select" title="Chunk Size">
+                    <option value="64">64KB (Slow)</option>
+                    <option value="128" selected>128KB (Balanced)</option>
+                    <option value="256">256KB (Fast)</option>
+                    <option value="512">512KB (Very Fast)</option>
+                </select>
+            </div>
+            <div class="control-panel">
+                <button id="buffer-toggle" title="Toggle Buffer Mode">Smart Buffer</button>
+            </div>
+            <div class="control-panel">
+                <button id="preload-toggle" title="Toggle Preload">Preload: Auto</button>
+            </div>
         </div>
 
         <!-- Connection Indicator -->
         <div class="connection-indicator" id="connection-indicator">
             <div class="connection-dot" id="connection-dot"></div>
-            <span id="connection-text">Detecting...</span>
+            <span id="connection-text">Optimizing...</span>
         </div>
 
-        <!-- Buffer Indicator -->
-        <div class="buffer-indicator" id="buffer-indicator">
-            Buffering...
+        <!-- Stream Info -->
+        <div class="stream-info" id="stream-info">
+            Buffer: 0s | Chunk: 128KB
+        </div>
+
+        <!-- Buffer Info -->
+        <div class="buffer-info" id="buffer-info">
+            Buffering: 0%
         </div>
 
         <!-- Speed Indicator -->
@@ -401,53 +443,76 @@
     </div>
 
     <script>
-        // Get the URL parameter correctly
+        // Get the URL parameter
         const urlParams = new URLSearchParams(window.location.search);
         const downloadUrl = urlParams.get('url');
         
+        // DOM elements
         const videoContainer = document.getElementById('video-container');
         const videoSrc = document.getElementById('video-src');
-        const qualitySelect = document.getElementById('quality-select');
+        const chunkSizeSelect = document.getElementById('chunk-size-select');
+        const bufferToggle = document.getElementById('buffer-toggle');
+        const preloadToggle = document.getElementById('preload-toggle');
         const connectionIndicator = document.getElementById('connection-indicator');
         const connectionDot = document.getElementById('connection-dot');
         const connectionText = document.getElementById('connection-text');
-        const bufferIndicator = document.getElementById('buffer-indicator');
+        const bufferInfo = document.getElementById('buffer-info');
         const speedIndicator = document.getElementById('speed-indicator');
+        const streamInfo = document.getElementById('stream-info');
         
+        // Streaming configuration
         let player;
-        let currentQuality = 'medium'; // Start with medium quality
+        let currentChunkSize = 128; // KB
+        let smartBufferMode = true;
+        let preloadMode = 'metadata';
         let downloadSpeed = 0;
-        let lastBytesLoaded = 0;
-        let lastTimeUpdate = Date.now();
-        let retryCount = 0;
-        const maxRetries = 3;
+        let bufferHealth = 0;
+        let isBuffering = false;
+        let streamingStats = {
+            bytesLoaded: 0,
+            lastUpdate: Date.now(),
+            avgSpeed: 0,
+            bufferTime: 0
+        };
         
         console.log('Download URL:', downloadUrl);
         
         if (downloadUrl) {
-            initializePlayer();
+            initializeOptimizedPlayer();
         } else {
             showError('No video URL provided. Please check the link and try again.');
         }
 
-        function initializePlayer() {
-            // Set initial video source
+        function initializeOptimizedPlayer() {
+            // Set initial video source with optimized parameters
             updateVideoSource();
             
             // Add loading state
             videoContainer.classList.add('loading');
             
-            // Initialize Video.js player with optimized settings
+            // Initialize Video.js player with optimized settings for fast streaming
             player = videojs('my-player', {
                 fluid: true,
                 responsive: true,
-                playbackRates: [0.5, 0.75, 1, 1.25, 1.5, 2],
-                preload: 'metadata',
+                playbackRates: [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2],
+                preload: preloadMode,
                 html5: {
+                    // Optimized HLS settings for reduced buffering
                     vhs: {
                         enableLowInitialPlaylist: true,
-                        smoothQualityChange: true,
-                        overrideNative: true
+                        smoothQualityChange: false, // Disable for faster switching
+                        overrideNative: true,
+                        useDevicePixelRatio: false, // Reduce processing
+                        // Aggressive buffering settings
+                        maxPlaylistRetries: 2,
+                        maxNetworkRetries: 2,
+                        segmentRequestTimeout: 10000,
+                        playlistRequestTimeout: 5000,
+                        // Reduce buffer requirements
+                        goalBufferLength: 10, // Reduced from default 30
+                        maxGoalBufferLength: 20, // Reduced from default 60
+                        bufferBasedABR: false, // Disable adaptive bitrate
+                        limitRenditionByPlayerDimensions: false
                     },
                     nativeVideoTracks: false,
                     nativeAudioTracks: false,
@@ -455,173 +520,178 @@
                 },
                 techOrder: ['html5'],
                 sources: [{
-                    src: getVideoUrl(),
+                    src: getOptimizedVideoUrl(),
                     type: 'video/mp4'
-                }]
+                }],
+                // Optimized player settings
+                liveui: false,
+                controls: true,
+                autoplay: false,
+                muted: false
             });
 
-            // Player event listeners
+            // Setup optimized player events
             player.ready(function() {
-                console.log('Player is ready');
-                setupPlayerEvents();
-                startSpeedMonitoring();
+                console.log('Optimized player ready');
+                setupOptimizedPlayerEvents();
+                startAdvancedMonitoring();
+                optimizeForConnection();
                 
-                // Auto-detect connection speed
-                setTimeout(detectConnectionSpeed, 1000);
+                // Show stream info briefly
+                showStreamInfo();
             });
 
-            // Quality selector event
-            qualitySelect.addEventListener('change', function() {
-                const newQuality = this.value;
-                if (newQuality !== currentQuality) {
-                    currentQuality = newQuality;
-                    changeQuality();
-                }
-            });
+            // Setup control event listeners
+            setupStreamingControls();
         }
 
-        function setupPlayerEvents() {
-            // Remove loading state when video loads
-            player.on('loadeddata', function() {
-                console.log('Video data loaded');
-                videoContainer.classList.remove('loading');
-                updateConnectionStatus('medium');
-                retryCount = 0; // Reset retry count on successful load
+        function setupOptimizedPlayerEvents() {
+            // Fast loading events
+            player.on('loadstart', function() {
+                console.log('Load started');
+                updateConnectionStatus('loading', 'Loading...');
+                videoContainer.classList.add('loading');
             });
-            
+
             player.on('loadedmetadata', function() {
-                console.log('Video metadata loaded');
+                console.log('Metadata loaded - starting playback optimization');
                 videoContainer.classList.remove('loading');
+                updateConnectionStatus('ready', 'Ready');
+                
+                // Optimize buffer immediately after metadata load
+                optimizeBuffer();
             });
-            
-            // Handle buffering events
-            player.on('waiting', function() {
-                console.log('Video waiting/buffering');
-                bufferIndicator.style.display = 'block';
-                updateConnectionStatus('slow');
-            });
-            
+
             player.on('canplay', function() {
-                console.log('Video can play');
-                bufferIndicator.style.display = 'none';
-                updateConnectionStatus('medium');
+                console.log('Can play - buffer optimized');
+                updateConnectionStatus('ready', 'Streaming');
+                bufferInfo.style.display = 'none';
+                isBuffering = false;
             });
-            
-            player.on('canplaythrough', function() {
-                console.log('Video can play through');
-                bufferIndicator.style.display = 'none';
-                updateConnectionStatus('fast');
+
+            // Aggressive buffering management
+            player.on('waiting', function() {
+                console.log('Buffering started');
+                isBuffering = true;
+                updateConnectionStatus('buffering', 'Buffering');
+                bufferInfo.style.display = 'block';
+                
+                // Auto-reduce chunk size if buffering frequently
+                if (smartBufferMode) {
+                    autoOptimizeChunkSize();
+                }
             });
-            
-            // Handle errors with intelligent retry and quality reduction
+
+            player.on('playing', function() {
+                console.log('Playing - buffer healthy');
+                isBuffering = false;
+                updateConnectionStatus('streaming', 'Streaming');
+                bufferInfo.style.display = 'none';
+            });
+
+            // Optimized error handling
             player.on('error', function() {
                 const error = player.error();
-                console.error('Video error:', error);
-                videoContainer.classList.remove('loading');
+                console.error('Player error:', error);
                 
-                if (error) {
-                    retryCount++;
-                    console.log(`Error attempt ${retryCount}/${maxRetries}`);
-                    
-                    if (retryCount <= maxRetries) {
-                        // Try reducing quality on network errors
-                        if (error.code === 4 || error.code === 2) { // Network or format error
-                            if (currentQuality === 'high') {
-                                currentQuality = 'medium';
-                                qualitySelect.value = 'medium';
-                                showNotification('Switched to medium quality due to network issues');
-                                setTimeout(() => changeQuality(), 1000);
-                                return;
-                            } else if (currentQuality === 'medium') {
-                                currentQuality = 'low';
-                                qualitySelect.value = 'low';
-                                showNotification('Switched to low quality for better streaming');
-                                setTimeout(() => changeQuality(), 1000);
-                                return;
-                            }
-                        }
-                        
-                        // Retry with same quality
-                        showNotification(`Retrying... (${retryCount}/${maxRetries})`);
+                if (error && error.code === 4) { // Network error
+                    // Auto-reduce chunk size and retry
+                    if (currentChunkSize > 64) {
+                        currentChunkSize = Math.max(64, currentChunkSize / 2);
+                        chunkSizeSelect.value = currentChunkSize;
+                        showNotification(`Reduced chunk size to ${currentChunkSize}KB for better streaming`);
                         setTimeout(() => {
-                            player.src(getVideoUrl());
+                            player.src(getOptimizedVideoUrl());
                             player.load();
-                        }, 2000 * retryCount); // Exponential backoff
+                        }, 1000);
                     } else {
-                        showError('Failed to load video after multiple attempts. Please check your connection and try again.');
+                        showError('Network error. Please check your connection.');
                     }
                 } else {
-                    showError('Failed to load video. Please check the URL and try again.');
+                    showError('Video playback error. Please try again.');
                 }
             });
-            
-            // Progress monitoring
+
+            // Advanced progress monitoring
             player.on('progress', function() {
-                updateBufferInfo();
+                updateAdvancedBufferInfo();
+                calculateStreamingStats();
             });
-            
-            // Stall detection and recovery
-            let stallTimeout;
+
+            // Stall prevention
+            let stallCount = 0;
             player.on('stalled', function() {
-                console.log('Video stalled, attempting recovery...');
-                updateConnectionStatus('slow');
+                stallCount++;
+                console.log(`Stall detected (${stallCount})`);
                 
-                // Auto-reduce quality if stalling frequently
-                stallTimeout = setTimeout(() => {
-                    if (currentQuality !== 'low') {
-                        const newQuality = currentQuality === 'high' ? 'medium' : 'low';
-                        currentQuality = newQuality;
-                        qualitySelect.value = newQuality;
-                        changeQuality();
-                        showNotification(`Reduced quality to ${newQuality} to improve playback`);
-                    }
-                }, 5000);
-            });
-            
-            player.on('playing', function() {
-                console.log('Video playing');
-                if (stallTimeout) {
-                    clearTimeout(stallTimeout);
+                if (stallCount > 2 && smartBufferMode) {
+                    // Aggressive optimization after multiple stalls
+                    currentChunkSize = Math.max(64, currentChunkSize / 2);
+                    chunkSizeSelect.value = currentChunkSize;
+                    updateVideoSource();
+                    showNotification('Optimizing for your connection...');
                 }
-                bufferIndicator.style.display = 'none';
-                updateConnectionStatus('medium');
             });
 
-            // Handle successful playback
-            player.on('play', function() {
-                console.log('Video play started');
-                retryCount = 0; // Reset retry count on successful play
+            player.on('playing', function() {
+                stallCount = 0; // Reset stall count when playing
             });
         }
 
-        function updateVideoSource() {
-            const url = getVideoUrl();
-            console.log('Setting video source:', url);
-            videoSrc.src = url;
+        function setupStreamingControls() {
+            // Chunk size control
+            chunkSizeSelect.addEventListener('change', function() {
+                currentChunkSize = parseInt(this.value);
+                updateVideoSource();
+                showNotification(`Chunk size set to ${currentChunkSize}KB`);
+                updateStreamInfo();
+            });
+
+            // Smart buffer toggle
+            bufferToggle.addEventListener('click', function() {
+                smartBufferMode = !smartBufferMode;
+                this.textContent = smartBufferMode ? 'Smart Buffer' : 'Manual Buffer';
+                this.style.background = smartBufferMode ? 'rgba(76, 175, 80, 0.3)' : 'rgba(255, 152, 0, 0.3)';
+                showNotification(`Smart buffering ${smartBufferMode ? 'enabled' : 'disabled'}`);
+            });
+
+            // Preload toggle
+            preloadToggle.addEventListener('click', function() {
+                const modes = ['none', 'metadata', 'auto'];
+                const currentIndex = modes.indexOf(preloadMode);
+                preloadMode = modes[(currentIndex + 1) % modes.length];
+                this.textContent = `Preload: ${preloadMode}`;
+                
+                if (player) {
+                    player.preload(preloadMode);
+                }
+                showNotification(`Preload mode: ${preloadMode}`);
+            });
         }
 
-        function getVideoUrl() {
+        function getOptimizedVideoUrl() {
             if (!downloadUrl) return '';
             
-            // Add quality parameter to the URL
             const url = new URL(downloadUrl);
-            url.searchParams.set('quality', currentQuality);
+            // Add optimized parameters
+            url.searchParams.set('chunk_size', currentChunkSize * 1024); // Convert to bytes
+            url.searchParams.set('buffer_mode', smartBufferMode ? 'smart' : 'manual');
+            url.searchParams.set('preload', preloadMode);
+            url.searchParams.set('optimize', 'true');
             url.searchParams.set('t', Date.now()); // Cache busting
+            
             return url.toString();
         }
 
-        function changeQuality() {
+        function updateVideoSource() {
             if (!player) return;
             
-            console.log(`Changing quality to: ${currentQuality}`);
             const currentTime = player.currentTime();
             const wasPaused = player.paused();
             
-            // Show loading state
-            videoContainer.classList.add('loading');
+            const newUrl = getOptimizedVideoUrl();
+            console.log('Updating video source with optimizations:', newUrl);
             
-            // Update source and reload
-            const newUrl = getVideoUrl();
             player.src({
                 src: newUrl,
                 type: 'video/mp4'
@@ -632,18 +702,104 @@
                     player.currentTime(currentTime);
                 }
                 if (!wasPaused) {
-                    player.play();
+                    player.play().catch(e => console.log('Autoplay prevented:', e));
                 }
-                videoContainer.classList.remove('loading');
             });
         }
 
-        function updateConnectionStatus(speed) {
-            connectionDot.className = `connection-dot ${speed}`;
-            connectionText.textContent = speed.charAt(0).toUpperCase() + speed.slice(1);
+        function optimizeForConnection() {
+            // Quick connection test
+            const startTime = Date.now();
+            
+            fetch(downloadUrl, {
+                method: 'HEAD',
+                cache: 'no-cache'
+            })
+            .then(response => {
+                const responseTime = Date.now() - startTime;
+                console.log(`Connection test: ${responseTime}ms`);
+                
+                // Auto-optimize based on response time
+                if (responseTime > 2000) {
+                    // Very slow connection
+                    currentChunkSize = 64;
+                    preloadMode = 'none';
+                    smartBufferMode = true;
+                } else if (responseTime > 1000) {
+                    // Moderate connection
+                    currentChunkSize = 128;
+                    preloadMode = 'metadata';
+                } else {
+                    // Fast connection
+                    currentChunkSize = 256;
+                    preloadMode = 'metadata';
+                }
+                
+                // Update UI
+                chunkSizeSelect.value = currentChunkSize;
+                preloadToggle.textContent = `Preload: ${preloadMode}`;
+                updateVideoSource();
+                
+                showNotification(`Optimized for your connection (${responseTime}ms)`);
+            })
+            .catch(error => {
+                console.log('Connection test failed, using conservative settings');
+                currentChunkSize = 64;
+                preloadMode = 'none';
+                chunkSizeSelect.value = currentChunkSize;
+                preloadToggle.textContent = `Preload: ${preloadMode}`;
+            });
         }
 
-        function updateBufferInfo() {
+        function autoOptimizeChunkSize() {
+            if (!smartBufferMode) return;
+            
+            // Reduce chunk size if buffering frequently
+            if (isBuffering && currentChunkSize > 64) {
+                const newSize = Math.max(64, currentChunkSize - 64);
+                if (newSize !== currentChunkSize) {
+                    currentChunkSize = newSize;
+                    chunkSizeSelect.value = currentChunkSize;
+                    updateVideoSource();
+                    showNotification(`Auto-optimized: ${currentChunkSize}KB chunks`);
+                }
+            }
+        }
+
+        function optimizeBuffer() {
+            if (!player) return;
+            
+            try {
+                // Get buffer information
+                const buffered = player.buffered();
+                const currentTime = player.currentTime();
+                
+                if (buffered.length > 0) {
+                    const bufferEnd = buffered.end(buffered.length - 1);
+                    bufferHealth = bufferEnd - currentTime;
+                    
+                    // Optimize based on buffer health
+                    if (bufferHealth < 5 && smartBufferMode) {
+                        // Low buffer - reduce chunk size
+                        if (currentChunkSize > 64) {
+                            currentChunkSize = Math.max(64, currentChunkSize - 64);
+                            chunkSizeSelect.value = currentChunkSize;
+                            updateVideoSource();
+                        }
+                    } else if (bufferHealth > 30 && downloadSpeed > 500) {
+                        // High buffer and good speed - can increase chunk size
+                        if (currentChunkSize < 512) {
+                            currentChunkSize = Math.min(512, currentChunkSize + 64);
+                            chunkSizeSelect.value = currentChunkSize;
+                        }
+                    }
+                }
+            } catch (e) {
+                console.log('Buffer optimization error:', e);
+            }
+        }
+
+        function updateAdvancedBufferInfo() {
             if (!player) return;
             
             try {
@@ -653,14 +809,19 @@
                 if (buffered.length > 0) {
                     const bufferEnd = buffered.end(buffered.length - 1);
                     const bufferAhead = bufferEnd - currentTime;
+                    const bufferPercent = Math.min(100, (bufferAhead / 30) * 100);
                     
-                    // Update connection status based on buffer health
-                    if (bufferAhead > 30) {
-                        updateConnectionStatus('fast');
+                    bufferInfo.textContent = `Buffer: ${bufferAhead.toFixed(1)}s (${bufferPercent.toFixed(0)}%)`;
+                    
+                    // Update connection status based on buffer
+                    if (bufferAhead > 20) {
+                        updateConnectionStatus('excellent', 'Excellent');
                     } else if (bufferAhead > 10) {
-                        updateConnectionStatus('medium');
-                    } else if (bufferAhead < 5) {
-                        updateConnectionStatus('slow');
+                        updateConnectionStatus('good', 'Good');
+                    } else if (bufferAhead > 5) {
+                        updateConnectionStatus('fair', 'Fair');
+                    } else {
+                        updateConnectionStatus('poor', 'Poor');
                     }
                 }
             } catch (e) {
@@ -668,93 +829,63 @@
             }
         }
 
-        function startSpeedMonitoring() {
-            setInterval(() => {
-                if (!player) return;
+        function calculateStreamingStats() {
+            try {
+                const now = Date.now();
+                const timeDiff = (now - streamingStats.lastUpdate) / 1000;
                 
-                try {
+                if (timeDiff > 1) { // Update every second
                     const buffered = player.buffered();
                     if (buffered.length > 0) {
-                        const totalBytes = buffered.end(buffered.length - 1) * 100000; // Rough estimate
-                        const currentTime = Date.now();
-                        const timeDiff = (currentTime - lastTimeUpdate) / 1000;
+                        const totalBytes = buffered.end(buffered.length - 1) * 125000; // Rough estimate
+                        const bytesDiff = totalBytes - streamingStats.bytesLoaded;
                         
-                        if (timeDiff > 0) {
-                            const bytesDiff = totalBytes - lastBytesLoaded;
+                        if (bytesDiff > 0) {
                             downloadSpeed = (bytesDiff / timeDiff) / 1024; // KB/s
+                            streamingStats.avgSpeed = (streamingStats.avgSpeed + downloadSpeed) / 2;
                             
-                            if (downloadSpeed > 0) {
-                                speedIndicator.textContent = `Speed: ${downloadSpeed.toFixed(0)} KB/s`;
-                            }
-                            
-                            lastBytesLoaded = totalBytes;
-                            lastTimeUpdate = currentTime;
+                            speedIndicator.textContent = `Speed: ${downloadSpeed.toFixed(0)} KB/s`;
                         }
+                        
+                        streamingStats.bytesLoaded = totalBytes;
+                        streamingStats.lastUpdate = now;
                     }
-                } catch (e) {
-                    console.log('Speed monitoring error:', e);
                 }
-            }, 3000);
+            } catch (e) {
+                console.log('Stats calculation error:', e);
+            }
         }
 
-        function detectConnectionSpeed() {
-            // Simple connection speed test using a small request
-            const startTime = Date.now();
-            
-            fetch(downloadUrl + '&test=speed', {
-                method: 'HEAD',
-                cache: 'no-cache'
-            })
-            .then(response => {
-                const endTime = Date.now();
-                const duration = endTime - startTime;
-                
-                console.log(`Connection test took ${duration}ms`);
-                
-                // Adjust quality based on response time
-                if (duration > 3000) { // Very slow
-                    if (currentQuality !== 'low') {
-                        currentQuality = 'low';
-                        qualitySelect.value = 'low';
-                        changeQuality();
-                        showNotification('Detected slow connection, switched to low quality');
-                    }
-                } else if (duration > 1500) { // Moderate
-                    if (currentQuality === 'high') {
-                        currentQuality = 'medium';
-                        qualitySelect.value = 'medium';
-                        changeQuality();
-                        showNotification('Optimized quality for your connection');
-                    }
+        function startAdvancedMonitoring() {
+            // Monitor every 2 seconds for optimal performance
+            setInterval(() => {
+                if (player && !player.paused()) {
+                    updateAdvancedBufferInfo();
+                    calculateStreamingStats();
+                    optimizeBuffer();
+                    updateStreamInfo();
                 }
-                // For fast connections, keep current quality
-            })
-            .catch(error => {
-                console.log('Connection test failed:', error);
-                // On connection test failure, default to low quality
-                if (currentQuality !== 'low') {
-                    currentQuality = 'low';
-                    qualitySelect.value = 'low';
-                    changeQuality();
-                    showNotification('Using low quality for stability');
-                }
-            });
+            }, 2000);
         }
 
-        function showError(message) {
-            videoContainer.classList.remove('loading');
-            const errorDiv = document.createElement('div');
-            errorDiv.className = 'error-message';
-            errorDiv.innerHTML = `
-                <strong>Video Loading Error</strong><br>
-                ${message}<br><br>
-                <small>Try refreshing the page or selecting a lower quality setting.</small>
-            `;
-            videoContainer.parentNode.insertBefore(errorDiv, videoContainer.nextSibling);
+        function updateConnectionStatus(status, text) {
+            connectionDot.className = `connection-dot ${status}`;
+            connectionText.textContent = text;
+        }
+
+        function updateStreamInfo() {
+            const bufferText = bufferHealth > 0 ? `${bufferHealth.toFixed(1)}s` : '0s';
+            streamInfo.textContent = `Buffer: ${bufferText} | Chunk: ${currentChunkSize}KB`;
+        }
+
+        function showStreamInfo() {
+            streamInfo.classList.add('show');
+            setTimeout(() => {
+                streamInfo.classList.remove('show');
+            }, 5000);
         }
 
         function showNotification(message) {
-            // Remove existing notification
             const existingNotification = document.querySelector('.success-message');
             if (existingNotification) {
                 existingNotification.remove();
@@ -765,18 +896,28 @@
             notificationDiv.textContent = message;
             document.body.appendChild(notificationDiv);
 
-            // Show the notification
             setTimeout(() => {
                 notificationDiv.classList.add('show');
             }, 100);
 
-            // Hide the notification after 3 seconds
             setTimeout(() => {
                 notificationDiv.classList.remove('show');
                 setTimeout(() => {
                     notificationDiv.remove();
                 }, 300);
             }, 3000);
+        }
+
+        function showError(message) {
+            videoContainer.classList.remove('loading');
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.innerHTML = `
+                <strong>Streaming Error</strong><br>
+                ${message}<br><br>
+                <small>Try adjusting the chunk size or buffer settings above.</small>
+            `;
+            videoContainer.parentNode.insertBefore(errorDiv, videoContainer.nextSibling);
         }
 
         function copyTextToClipboard(text) {
@@ -837,7 +978,45 @@
             }
         }
 
-        // Handle orientation changes on mobile
+        // Keyboard shortcuts for quick optimization
+        document.addEventListener('keydown', function(e) {
+            if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') {
+                switch(e.key) {
+                    case '1':
+                        currentChunkSize = 64;
+                        chunkSizeSelect.value = 64;
+                        updateVideoSource();
+                        showNotification('Chunk size: 64KB (Slow connection)');
+                        break;
+                    case '2':
+                        currentChunkSize = 128;
+                        chunkSizeSelect.value = 128;
+                        updateVideoSource();
+                        showNotification('Chunk size: 128KB (Balanced)');
+                        break;
+                    case '3':
+                        currentChunkSize = 256;
+                        chunkSizeSelect.value = 256;
+                        updateVideoSource();
+                        showNotification('Chunk size: 256KB (Fast)');
+                        break;
+                    case '4':
+                        currentChunkSize = 512;
+                        chunkSizeSelect.value = 512;
+                        updateVideoSource();
+                        showNotification('Chunk size: 512KB (Very Fast)');
+                        break;
+                    case 'b':
+                        bufferToggle.click();
+                        break;
+                    case 'p':
+                        preloadToggle.click();
+                        break;
+                }
+            }
+        });
+
+        // Handle orientation changes
         window.addEventListener('orientationchange', function() {
             setTimeout(function() {
                 if (player) {
@@ -846,63 +1025,10 @@
             }, 500);
         });
 
-        // Keyboard shortcuts
-        document.addEventListener('keydown', function(e) {
-            if (e.ctrlKey || e.metaKey) {
-                switch(e.key) {
-                    case 'c':
-                        e.preventDefault();
-                        copyStreamUrl();
-                        break;
-                    case 'd':
-                        e.preventDefault();
-                        copyDownloadUrl();
-                        break;
-                    case 'o':
-                        e.preventDefault();
-                        openDownloadUrl();
-                        break;
-                }
-            }
-            
-            // Quality shortcuts (only when not in input fields)
-            if (!e.ctrlKey && !e.metaKey && e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') {
-                switch(e.key) {
-                    case '1':
-                        currentQuality = 'low';
-                        qualitySelect.value = 'low';
-                        changeQuality();
-                        showNotification('Switched to Low Quality');
-                        break;
-                    case '2':
-                        currentQuality = 'medium';
-                        qualitySelect.value = 'medium';
-                        changeQuality();
-                        showNotification('Switched to Medium Quality');
-                        break;
-                    case '3':
-                        currentQuality = 'high';
-                        qualitySelect.value = 'high';
-                        changeQuality();
-                        showNotification('Switched to High Quality');
-                        break;
-                    case '0':
-                        currentQuality = 'auto';
-                        qualitySelect.value = 'auto';
-                        changeQuality();
-                        showNotification('Switched to Auto Quality');
-                        break;
-                }
-            }
-        });
-
-        // Prevent video errors from breaking the page
+        // Prevent errors from breaking the page
         window.addEventListener('error', function(e) {
             console.log('Global error caught:', e);
         });
-
-        // Set initial quality to medium for better compatibility
-        qualitySelect.value = 'medium';
     </script>
 </body>
 
