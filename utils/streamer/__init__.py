@@ -30,7 +30,7 @@ async def media_streamer(channel: int, message_id: int, file_name: str, request)
     file_size = file_id.file_size
 
     # Check for quality parameter for adaptive streaming
-    quality = request.query_params.get("quality", "auto")
+    quality = request.query_params.get("quality", "medium")
     
     if range_header:
         from_bytes, until_bytes = range_header.replace("bytes=", "").split("-")
@@ -58,9 +58,9 @@ async def media_streamer(channel: int, message_id: int, file_name: str, request)
     req_length = until_bytes - from_bytes + 1
     part_count = math.ceil(until_bytes / chunk_size) - math.floor(offset / chunk_size)
     
-    # Use adaptive streaming for better performance
-    body = tg_connect.yield_file_adaptive(
-        file_id, offset, first_part_cut, last_part_cut, part_count, chunk_size, quality
+    # Use standard streaming for better compatibility
+    body = tg_connect.yield_file(
+        file_id, offset, first_part_cut, last_part_cut, part_count, chunk_size
     )
 
     disposition = "attachment"
@@ -74,11 +74,12 @@ async def media_streamer(channel: int, message_id: int, file_name: str, request)
     ):
         disposition = "inline"
 
-    # Add caching headers for better performance
+    # Add optimized caching headers for video streaming
     cache_headers = {
-        "Cache-Control": "public, max-age=3600",
-        "ETag": f'"{message_id}-{file_size}"',
+        "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400",
+        "ETag": f'"{message_id}-{file_size}-{quality}"',
         "Accept-Ranges": "bytes",
+        "Connection": "keep-alive",
     }
 
     response_headers = {
@@ -99,21 +100,25 @@ async def media_streamer(channel: int, message_id: int, file_name: str, request)
 
 def get_adaptive_chunk_size(request, quality):
     """Determine optimal chunk size based on quality and connection"""
-    # Base chunk sizes for different qualities
+    # Base chunk sizes for different qualities (optimized for streaming)
     chunk_sizes = {
-        "low": 256 * 1024,      # 256KB for slow connections
-        "medium": 512 * 1024,   # 512KB for medium connections
-        "high": 1024 * 1024,    # 1MB for fast connections
-        "auto": 512 * 1024      # Default adaptive size
+        "low": 128 * 1024,      # 128KB for slow connections
+        "medium": 256 * 1024,   # 256KB for medium connections  
+        "high": 512 * 1024,     # 512KB for fast connections
+        "auto": 256 * 1024      # Default adaptive size
     }
     
     # Check for connection speed hints from headers
     connection_type = request.headers.get("Connection-Type", "").lower()
     save_data = request.headers.get("Save-Data", "").lower() == "on"
+    user_agent = request.headers.get("User-Agent", "").lower()
     
-    if save_data or "slow" in connection_type:
+    # Detect mobile devices and adjust accordingly
+    is_mobile = any(mobile in user_agent for mobile in ['mobile', 'android', 'iphone', 'ipad'])
+    
+    if save_data or "slow" in connection_type or is_mobile:
         return chunk_sizes["low"]
     elif quality in chunk_sizes:
         return chunk_sizes[quality]
     else:
-        return chunk_sizes["auto"]
+        return chunk_sizes["medium"]  # Safe default

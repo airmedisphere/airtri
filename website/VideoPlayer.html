@@ -401,7 +401,10 @@
     </div>
 
     <script>
-        const downloadUrl = (new URL(window.location.href)).searchParams.get('url');
+        // Get the URL parameter correctly
+        const urlParams = new URLSearchParams(window.location.search);
+        const downloadUrl = urlParams.get('url');
+        
         const videoContainer = document.getElementById('video-container');
         const videoSrc = document.getElementById('video-src');
         const qualitySelect = document.getElementById('quality-select');
@@ -412,30 +415,34 @@
         const speedIndicator = document.getElementById('speed-indicator');
         
         let player;
-        let currentQuality = 'auto';
+        let currentQuality = 'medium'; // Start with medium quality
         let downloadSpeed = 0;
         let lastBytesLoaded = 0;
         let lastTimeUpdate = Date.now();
+        let retryCount = 0;
+        const maxRetries = 3;
+        
+        console.log('Download URL:', downloadUrl);
         
         if (downloadUrl) {
             initializePlayer();
         } else {
-            showError('No video URL provided.');
+            showError('No video URL provided. Please check the link and try again.');
         }
 
         function initializePlayer() {
-            // Set initial video source with quality parameter
+            // Set initial video source
             updateVideoSource();
             
             // Add loading state
             videoContainer.classList.add('loading');
             
-            // Initialize Video.js player with optimized settings for slow connections
+            // Initialize Video.js player with optimized settings
             player = videojs('my-player', {
                 fluid: true,
                 responsive: true,
-                playbackRates: [0.5, 1, 1.25, 1.5, 2],
-                preload: 'metadata', // Only load metadata initially
+                playbackRates: [0.5, 0.75, 1, 1.25, 1.5, 2],
+                preload: 'metadata',
                 html5: {
                     vhs: {
                         enableLowInitialPlaylist: true,
@@ -445,7 +452,12 @@
                     nativeVideoTracks: false,
                     nativeAudioTracks: false,
                     nativeTextTracks: false
-                }
+                },
+                techOrder: ['html5'],
+                sources: [{
+                    src: getVideoUrl(),
+                    type: 'video/mp4'
+                }]
             });
 
             // Player event listeners
@@ -453,17 +465,17 @@
                 console.log('Player is ready');
                 setupPlayerEvents();
                 startSpeedMonitoring();
+                
+                // Auto-detect connection speed
+                setTimeout(detectConnectionSpeed, 1000);
             });
 
             // Quality selector event
             qualitySelect.addEventListener('change', function() {
-                currentQuality = this.value;
-                updateVideoSource();
-                if (player) {
-                    const currentTime = player.currentTime();
-                    player.src(getVideoUrl());
-                    player.currentTime(currentTime);
-                    player.play();
+                const newQuality = this.value;
+                if (newQuality !== currentQuality) {
+                    currentQuality = newQuality;
+                    changeQuality();
                 }
             });
         }
@@ -471,44 +483,72 @@
         function setupPlayerEvents() {
             // Remove loading state when video loads
             player.on('loadeddata', function() {
+                console.log('Video data loaded');
                 videoContainer.classList.remove('loading');
                 updateConnectionStatus('medium');
+                retryCount = 0; // Reset retry count on successful load
+            });
+            
+            player.on('loadedmetadata', function() {
+                console.log('Video metadata loaded');
+                videoContainer.classList.remove('loading');
             });
             
             // Handle buffering events
             player.on('waiting', function() {
+                console.log('Video waiting/buffering');
                 bufferIndicator.style.display = 'block';
                 updateConnectionStatus('slow');
             });
             
             player.on('canplay', function() {
+                console.log('Video can play');
                 bufferIndicator.style.display = 'none';
+                updateConnectionStatus('medium');
             });
             
             player.on('canplaythrough', function() {
+                console.log('Video can play through');
                 bufferIndicator.style.display = 'none';
                 updateConnectionStatus('fast');
             });
             
-            // Handle errors with retry logic
+            // Handle errors with intelligent retry and quality reduction
             player.on('error', function() {
                 const error = player.error();
                 console.error('Video error:', error);
+                videoContainer.classList.remove('loading');
                 
-                if (error && error.code === 4) { // Network error
-                    // Try lower quality automatically
-                    if (currentQuality === 'high') {
-                        currentQuality = 'medium';
-                        qualitySelect.value = 'medium';
-                        updateVideoSource();
-                        showNotification('Switched to medium quality due to network issues');
-                    } else if (currentQuality === 'medium') {
-                        currentQuality = 'low';
-                        qualitySelect.value = 'low';
-                        updateVideoSource();
-                        showNotification('Switched to low quality for better streaming');
+                if (error) {
+                    retryCount++;
+                    console.log(`Error attempt ${retryCount}/${maxRetries}`);
+                    
+                    if (retryCount <= maxRetries) {
+                        // Try reducing quality on network errors
+                        if (error.code === 4 || error.code === 2) { // Network or format error
+                            if (currentQuality === 'high') {
+                                currentQuality = 'medium';
+                                qualitySelect.value = 'medium';
+                                showNotification('Switched to medium quality due to network issues');
+                                setTimeout(() => changeQuality(), 1000);
+                                return;
+                            } else if (currentQuality === 'medium') {
+                                currentQuality = 'low';
+                                qualitySelect.value = 'low';
+                                showNotification('Switched to low quality for better streaming');
+                                setTimeout(() => changeQuality(), 1000);
+                                return;
+                            }
+                        }
+                        
+                        // Retry with same quality
+                        showNotification(`Retrying... (${retryCount}/${maxRetries})`);
+                        setTimeout(() => {
+                            player.src(getVideoUrl());
+                            player.load();
+                        }, 2000 * retryCount); // Exponential backoff
                     } else {
-                        showError('Failed to load video. Please check your connection and try again.');
+                        showError('Failed to load video after multiple attempts. Please check your connection and try again.');
                     }
                 } else {
                     showError('Failed to load video. Please check the URL and try again.');
@@ -532,32 +572,70 @@
                         const newQuality = currentQuality === 'high' ? 'medium' : 'low';
                         currentQuality = newQuality;
                         qualitySelect.value = newQuality;
-                        updateVideoSource();
+                        changeQuality();
                         showNotification(`Reduced quality to ${newQuality} to improve playback`);
                     }
                 }, 5000);
             });
             
             player.on('playing', function() {
+                console.log('Video playing');
                 if (stallTimeout) {
                     clearTimeout(stallTimeout);
                 }
                 bufferIndicator.style.display = 'none';
+                updateConnectionStatus('medium');
+            });
+
+            // Handle successful playback
+            player.on('play', function() {
+                console.log('Video play started');
+                retryCount = 0; // Reset retry count on successful play
             });
         }
 
         function updateVideoSource() {
             const url = getVideoUrl();
+            console.log('Setting video source:', url);
             videoSrc.src = url;
-            if (player && player.src) {
-                player.src(url);
-            }
         }
 
         function getVideoUrl() {
+            if (!downloadUrl) return '';
+            
+            // Add quality parameter to the URL
             const url = new URL(downloadUrl);
             url.searchParams.set('quality', currentQuality);
+            url.searchParams.set('t', Date.now()); // Cache busting
             return url.toString();
+        }
+
+        function changeQuality() {
+            if (!player) return;
+            
+            console.log(`Changing quality to: ${currentQuality}`);
+            const currentTime = player.currentTime();
+            const wasPaused = player.paused();
+            
+            // Show loading state
+            videoContainer.classList.add('loading');
+            
+            // Update source and reload
+            const newUrl = getVideoUrl();
+            player.src({
+                src: newUrl,
+                type: 'video/mp4'
+            });
+            
+            player.ready(() => {
+                if (currentTime > 0) {
+                    player.currentTime(currentTime);
+                }
+                if (!wasPaused) {
+                    player.play();
+                }
+                videoContainer.classList.remove('loading');
+            });
         }
 
         function updateConnectionStatus(speed) {
@@ -568,22 +646,25 @@
         function updateBufferInfo() {
             if (!player) return;
             
-            const buffered = player.buffered();
-            const currentTime = player.currentTime();
-            const duration = player.duration();
-            
-            if (buffered.length > 0) {
-                const bufferEnd = buffered.end(buffered.length - 1);
-                const bufferAhead = bufferEnd - currentTime;
+            try {
+                const buffered = player.buffered();
+                const currentTime = player.currentTime();
                 
-                // Update connection status based on buffer health
-                if (bufferAhead > 30) {
-                    updateConnectionStatus('fast');
-                } else if (bufferAhead > 10) {
-                    updateConnectionStatus('medium');
-                } else if (bufferAhead < 5) {
-                    updateConnectionStatus('slow');
+                if (buffered.length > 0) {
+                    const bufferEnd = buffered.end(buffered.length - 1);
+                    const bufferAhead = bufferEnd - currentTime;
+                    
+                    // Update connection status based on buffer health
+                    if (bufferAhead > 30) {
+                        updateConnectionStatus('fast');
+                    } else if (bufferAhead > 10) {
+                        updateConnectionStatus('medium');
+                    } else if (bufferAhead < 5) {
+                        updateConnectionStatus('slow');
+                    }
                 }
+            } catch (e) {
+                console.log('Buffer info update error:', e);
             }
         }
 
@@ -591,30 +672,84 @@
             setInterval(() => {
                 if (!player) return;
                 
-                const buffered = player.buffered();
-                if (buffered.length > 0) {
-                    const totalBytes = buffered.end(buffered.length - 1) * 1000000; // Rough estimate
-                    const currentTime = Date.now();
-                    const timeDiff = (currentTime - lastTimeUpdate) / 1000;
-                    
-                    if (timeDiff > 0) {
-                        const bytesDiff = totalBytes - lastBytesLoaded;
-                        downloadSpeed = (bytesDiff / timeDiff) / 1024; // KB/s
+                try {
+                    const buffered = player.buffered();
+                    if (buffered.length > 0) {
+                        const totalBytes = buffered.end(buffered.length - 1) * 100000; // Rough estimate
+                        const currentTime = Date.now();
+                        const timeDiff = (currentTime - lastTimeUpdate) / 1000;
                         
-                        speedIndicator.textContent = `Speed: ${downloadSpeed.toFixed(0)} KB/s`;
-                        
-                        lastBytesLoaded = totalBytes;
-                        lastTimeUpdate = currentTime;
+                        if (timeDiff > 0) {
+                            const bytesDiff = totalBytes - lastBytesLoaded;
+                            downloadSpeed = (bytesDiff / timeDiff) / 1024; // KB/s
+                            
+                            if (downloadSpeed > 0) {
+                                speedIndicator.textContent = `Speed: ${downloadSpeed.toFixed(0)} KB/s`;
+                            }
+                            
+                            lastBytesLoaded = totalBytes;
+                            lastTimeUpdate = currentTime;
+                        }
+                    }
+                } catch (e) {
+                    console.log('Speed monitoring error:', e);
+                }
+            }, 3000);
+        }
+
+        function detectConnectionSpeed() {
+            // Simple connection speed test using a small request
+            const startTime = Date.now();
+            
+            fetch(downloadUrl + '&test=speed', {
+                method: 'HEAD',
+                cache: 'no-cache'
+            })
+            .then(response => {
+                const endTime = Date.now();
+                const duration = endTime - startTime;
+                
+                console.log(`Connection test took ${duration}ms`);
+                
+                // Adjust quality based on response time
+                if (duration > 3000) { // Very slow
+                    if (currentQuality !== 'low') {
+                        currentQuality = 'low';
+                        qualitySelect.value = 'low';
+                        changeQuality();
+                        showNotification('Detected slow connection, switched to low quality');
+                    }
+                } else if (duration > 1500) { // Moderate
+                    if (currentQuality === 'high') {
+                        currentQuality = 'medium';
+                        qualitySelect.value = 'medium';
+                        changeQuality();
+                        showNotification('Optimized quality for your connection');
                     }
                 }
-            }, 2000);
+                // For fast connections, keep current quality
+            })
+            .catch(error => {
+                console.log('Connection test failed:', error);
+                // On connection test failure, default to low quality
+                if (currentQuality !== 'low') {
+                    currentQuality = 'low';
+                    qualitySelect.value = 'low';
+                    changeQuality();
+                    showNotification('Using low quality for stability');
+                }
+            });
         }
 
         function showError(message) {
             videoContainer.classList.remove('loading');
             const errorDiv = document.createElement('div');
             errorDiv.className = 'error-message';
-            errorDiv.textContent = message;
+            errorDiv.innerHTML = `
+                <strong>Video Loading Error</strong><br>
+                ${message}<br><br>
+                <small>Try refreshing the page or selecting a lower quality setting.</small>
+            `;
             videoContainer.parentNode.insertBefore(errorDiv, videoContainer.nextSibling);
         }
 
@@ -696,7 +831,7 @@
 
         function openDownloadUrl() {
             if (downloadUrl) {
-                window.location.href = downloadUrl;
+                window.open(downloadUrl, '_blank');
             } else {
                 alert('No download URL available.');
             }
@@ -730,65 +865,44 @@
                 }
             }
             
-            // Quality shortcuts
-            if (!e.ctrlKey && !e.metaKey) {
+            // Quality shortcuts (only when not in input fields)
+            if (!e.ctrlKey && !e.metaKey && e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') {
                 switch(e.key) {
                     case '1':
                         currentQuality = 'low';
                         qualitySelect.value = 'low';
-                        updateVideoSource();
+                        changeQuality();
                         showNotification('Switched to Low Quality');
                         break;
                     case '2':
                         currentQuality = 'medium';
                         qualitySelect.value = 'medium';
-                        updateVideoSource();
+                        changeQuality();
                         showNotification('Switched to Medium Quality');
                         break;
                     case '3':
                         currentQuality = 'high';
                         qualitySelect.value = 'high';
-                        updateVideoSource();
+                        changeQuality();
                         showNotification('Switched to High Quality');
                         break;
                     case '0':
                         currentQuality = 'auto';
                         qualitySelect.value = 'auto';
-                        updateVideoSource();
+                        changeQuality();
                         showNotification('Switched to Auto Quality');
                         break;
                 }
             }
         });
 
-        // Connection speed detection
-        function detectConnectionSpeed() {
-            const startTime = Date.now();
-            const testImage = new Image();
-            
-            testImage.onload = function() {
-                const endTime = Date.now();
-                const duration = (endTime - startTime) / 1000;
-                const bitsLoaded = 50000 * 8; // Rough estimate for test image
-                const speedBps = bitsLoaded / duration;
-                const speedKbps = speedBps / 1024;
-                
-                if (speedKbps < 500) {
-                    // Automatically set to low quality for slow connections
-                    if (currentQuality === 'auto' || currentQuality === 'high') {
-                        currentQuality = 'low';
-                        qualitySelect.value = 'low';
-                        updateVideoSource();
-                        showNotification('Detected slow connection, switched to low quality');
-                    }
-                }
-            };
-            
-            testImage.src = downloadUrl + '&test=1&t=' + Date.now();
-        }
+        // Prevent video errors from breaking the page
+        window.addEventListener('error', function(e) {
+            console.log('Global error caught:', e);
+        });
 
-        // Run connection speed test after a short delay
-        setTimeout(detectConnectionSpeed, 2000);
+        // Set initial quality to medium for better compatibility
+        qualitySelect.value = 'medium';
     </script>
 </body>
 
