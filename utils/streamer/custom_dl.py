@@ -16,7 +16,7 @@ class ByteStreamer:
         self.clean_timer = 30 * 60
         self.client: Client = client
         self.cached_file_ids: Dict[int, FileId] = {}
-        self.connection_stats = {"speed": "medium", "last_update": time.time()}
+        self.connection_stats = {"speed": "fast", "last_update": time.time()}
         asyncio.create_task(self.clean_cache())
 
     async def get_file_properties(self, channel, message_id: int) -> FileId:
@@ -136,6 +136,107 @@ class ByteStreamer:
             )
         return location
 
+    async def yield_file_fast(
+        self,
+        file_id: FileId,
+        offset: int,
+        first_part_cut: int,
+        last_part_cut: int,
+        part_count: int,
+        chunk_size: int,
+        quality: str = "720p"
+    ):
+        """
+        Ultra-fast file streaming optimized for speed and minimal buffering
+        """
+        client = self.client
+        logger.debug(f"Fast streaming: quality={quality}, chunk_size={chunk_size}")
+        media_session = await self.generate_media_session(client, file_id)
+
+        current_part = 1
+        location = await self.get_location(file_id)
+        
+        # Aggressive optimization for speed
+        max_retries = 2  # Reduced retries for speed
+        timeout = 10.0   # Shorter timeout
+        
+        # Parallel chunk fetching for better speed
+        concurrent_chunks = min(3, part_count)  # Fetch up to 3 chunks in parallel
+        
+        try:
+            while current_part <= part_count:
+                # Fetch multiple chunks concurrently for speed
+                chunk_tasks = []
+                
+                for i in range(min(concurrent_chunks, part_count - current_part + 1)):
+                    chunk_offset = offset + (i * chunk_size)
+                    task = self._fetch_chunk_fast(media_session, location, chunk_offset, chunk_size, timeout)
+                    chunk_tasks.append(task)
+                
+                # Wait for chunks and yield them in order
+                try:
+                    chunks = await asyncio.gather(*chunk_tasks, return_exceptions=True)
+                    
+                    for i, chunk_result in enumerate(chunks):
+                        if isinstance(chunk_result, Exception):
+                            logger.warning(f"Chunk {current_part + i} failed: {chunk_result}")
+                            # Try single chunk fetch as fallback
+                            chunk_offset = offset + (i * chunk_size)
+                            chunk_result = await self._fetch_chunk_fast(media_session, location, chunk_offset, chunk_size, timeout)
+                        
+                        if chunk_result:
+                            # Yield appropriate chunk portion
+                            if part_count == 1:
+                                yield chunk_result[first_part_cut:last_part_cut]
+                            elif current_part == 1:
+                                yield chunk_result[first_part_cut:]
+                            elif current_part == part_count:
+                                yield chunk_result[:last_part_cut]
+                            else:
+                                yield chunk_result
+                        
+                        current_part += 1
+                        offset += chunk_size
+                        
+                        if current_part > part_count:
+                            break
+                            
+                except Exception as e:
+                    logger.error(f"Parallel chunk fetch failed: {e}")
+                    # Fallback to single chunk mode
+                    break
+                    
+        except Exception as e:
+            logger.error(f"Fast streaming error: {e}")
+            # Fallback to original method
+            async for chunk in self.yield_file(file_id, offset, first_part_cut, last_part_cut, part_count, chunk_size):
+                yield chunk
+
+    async def _fetch_chunk_fast(self, media_session, location, offset, chunk_size, timeout):
+        """Fetch a single chunk with optimized settings"""
+        try:
+            r = await asyncio.wait_for(
+                media_session.invoke(
+                    raw.functions.upload.GetFile(
+                        location=location, 
+                        offset=offset, 
+                        limit=chunk_size
+                    ),
+                ),
+                timeout=timeout
+            )
+            
+            if isinstance(r, raw.types.upload.File):
+                return r.bytes
+            return None
+            
+        except asyncio.TimeoutError:
+            logger.warning(f"Chunk fetch timeout at offset {offset}")
+            return None
+        except Exception as e:
+            logger.warning(f"Chunk fetch error at offset {offset}: {e}")
+            return None
+
     async def yield_file(
         self,
         file_id: FileId,
@@ -146,16 +247,16 @@ class ByteStreamer:
         chunk_size: int,
     ):
         """
-        Optimized generator that yields the bytes of the media file with better error handling.
+        Fallback streaming method with standard optimization
         """
         client = self.client
-        logger.debug(f"Starting to yield file with client, chunk_size: {chunk_size}")
+        logger.debug(f"Standard streaming: chunk_size={chunk_size}")
         media_session = await self.generate_media_session(client, file_id)
 
         current_part = 1
         location = await self.get_location(file_id)
         retry_count = 0
-        max_retries = 3
+        max_retries = 2
 
         try:
             while current_part <= part_count:
@@ -168,7 +269,7 @@ class ByteStreamer:
                                 location=location, offset=offset, limit=chunk_size
                             ),
                         ),
-                        timeout=30.0  # 30 second timeout
+                        timeout=15.0
                     )
                     
                     if isinstance(r, raw.types.upload.File):
@@ -176,12 +277,6 @@ class ByteStreamer:
                         if not chunk:
                             break
                             
-                        # Measure and log performance
-                        download_time = time.time() - start_time
-                        if download_time > 0:
-                            speed_kbps = (len(chunk) / download_time) / 1024
-                            logger.debug(f"Chunk {current_part}: {len(chunk)} bytes in {download_time:.2f}s ({speed_kbps:.1f} KB/s)")
-                        
                         # Yield appropriate chunk portion
                         if part_count == 1:
                             yield chunk[first_part_cut:last_part_cut]
@@ -194,11 +289,12 @@ class ByteStreamer:
 
                         current_part += 1
                         offset += chunk_size
-                        retry_count = 0  # Reset retry count on success
+                        retry_count = 0
                         
-                        # Small delay for very fast requests to prevent overwhelming
-                        if download_time < 0.1:
-                            await asyncio.sleep(0.05)
+                        # Minimal delay for very fast requests
+                        download_time = time.time() - start_time
+                        if download_time < 0.05:
+                            await asyncio.sleep(0.01)
                             
                 except (asyncio.TimeoutError, Exception) as e:
                     retry_count += 1
@@ -208,14 +304,13 @@ class ByteStreamer:
                         logger.error(f"Max retries reached for chunk {current_part}")
                         break
                     
-                    # Exponential backoff
-                    delay = min(2 ** retry_count, 10)
-                    await asyncio.sleep(delay)
+                    # Quick retry with minimal delay
+                    await asyncio.sleep(0.1)
                     
         except Exception as e:
-            logger.error(f"Fatal error in file streaming: {e}")
+            logger.error(f"Streaming error: {e}")
         finally:
-            logger.debug(f"Finished yielding file with {current_part-1} parts.")
+            logger.debug(f"Finished streaming {current_part-1} parts")
 
     async def clean_cache(self) -> None:
         """

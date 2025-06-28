@@ -4,14 +4,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AirDrive - Video Player</title>
+    <title>AirDrive - Fast Video Player</title>
 
     <link href="//vjs.zencdn.net/8.3.0/video-js.min.css" rel="stylesheet">
     <script src="//vjs.zencdn.net/8.3.0/video.min.js"></script>
-    <!-- HLS.js for better streaming support -->
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-    <!-- Video.js HLS plugin -->
-    <script src="https://vhs.videojs.com/latest/videojs-http-streaming.min.js"></script>
     
     <style>
         * {
@@ -47,17 +43,17 @@
             height: auto !important;
         }
 
-        /* Quality Selector - YouTube Style */
+        /* Fast Quality Selector */
         .quality-selector {
             position: absolute;
             top: 15px;
             right: 15px;
             z-index: 1000;
-            background: rgba(0, 0, 0, 0.8);
+            background: rgba(0, 0, 0, 0.9);
             border-radius: 8px;
             padding: 8px;
             backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }
 
         .quality-selector select {
@@ -78,12 +74,6 @@
             padding: 8px;
         }
 
-        .quality-selector select:focus {
-            outline: none;
-            border-color: #ff0000;
-            box-shadow: 0 0 0 2px rgba(255, 0, 0, 0.3);
-        }
-
         .quality-label {
             color: white;
             font-size: 12px;
@@ -93,30 +83,37 @@
             letter-spacing: 0.5px;
         }
 
-        /* Auto Quality Indicator */
-        .auto-quality-indicator {
+        /* Speed Indicator */
+        .speed-indicator {
             position: absolute;
             top: 15px;
             left: 15px;
             z-index: 1000;
-            background: rgba(255, 0, 0, 0.9);
+            background: rgba(76, 175, 80, 0.9);
             color: white;
             padding: 6px 12px;
             border-radius: 6px;
             font-size: 12px;
             font-weight: 600;
-            display: none;
             backdrop-filter: blur(10px);
             animation: pulse 2s infinite;
         }
 
-        .auto-quality-indicator.show {
-            display: block;
+        .speed-indicator.fast {
+            background: rgba(76, 175, 80, 0.9);
+        }
+
+        .speed-indicator.medium {
+            background: rgba(255, 152, 0, 0.9);
+        }
+
+        .speed-indicator.slow {
+            background: rgba(244, 67, 54, 0.9);
         }
 
         @keyframes pulse {
             0% { opacity: 1; }
-            50% { opacity: 0.7; }
+            50% { opacity: 0.8; }
             100% { opacity: 1; }
         }
 
@@ -135,7 +132,6 @@
             align-items: center;
             gap: 8px;
             backdrop-filter: blur(10px);
-            transition: opacity 0.3s ease;
         }
 
         .connection-dot {
@@ -156,12 +152,7 @@
             animation: none;
         }
 
-        .connection-dot.transcoding {
-            background: #2196f3;
-            animation: pulse 1s infinite;
-        }
-
-        /* Quality Info Display */
+        /* Quality Info */
         .quality-info {
             position: absolute;
             bottom: 80px;
@@ -174,91 +165,6 @@
             font-size: 11px;
             backdrop-filter: blur(10px);
             font-weight: 500;
-        }
-
-        /* Transcoding Progress */
-        .transcoding-progress {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            z-index: 1001;
-            background: rgba(0, 0, 0, 0.9);
-            color: white;
-            padding: 20px 30px;
-            border-radius: 12px;
-            text-align: center;
-            display: none;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .transcoding-progress.show {
-            display: block;
-        }
-
-        .transcoding-spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid rgba(255, 255, 255, 0.3);
-            border-top: 4px solid #2196f3;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 15px;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .transcoding-text {
-            font-size: 14px;
-            font-weight: 500;
-            margin-bottom: 8px;
-        }
-
-        .transcoding-subtext {
-            font-size: 12px;
-            opacity: 0.8;
-        }
-
-        /* Streaming Controls */
-        .streaming-controls {
-            position: absolute;
-            top: 60px;
-            right: 15px;
-            z-index: 999;
-            display: flex;
-            gap: 8px;
-            flex-direction: column;
-        }
-
-        .control-panel {
-            background: rgba(0, 0, 0, 0.8);
-            border-radius: 6px;
-            padding: 6px 8px;
-            backdrop-filter: blur(10px);
-        }
-
-        .control-panel select, .control-panel button {
-            background: transparent;
-            color: white;
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            border-radius: 4px;
-            padding: 4px 8px;
-            font-size: 11px;
-            cursor: pointer;
-            min-width: 80px;
-        }
-
-        .control-panel select option {
-            background: #333;
-            color: white;
-        }
-
-        .control-panel button:hover {
-            background: rgba(255, 255, 255, 0.1);
         }
 
         .buttons-container {
@@ -315,12 +221,6 @@
         .video-js .vjs-control-bar {
             background: rgba(0, 0, 0, 0.8) !important;
             backdrop-filter: blur(10px) !important;
-            z-index: 1001 !important;
-        }
-
-        .video-js .vjs-picture-in-picture-control,
-        .video-js .vjs-fullscreen-control {
-            z-index: 1002 !important;
         }
 
         /* Mobile Styles */
@@ -345,23 +245,7 @@
                 min-width: 100px;
             }
 
-            .streaming-controls {
-                top: 50px;
-                right: 10px;
-                gap: 4px;
-            }
-
-            .control-panel {
-                padding: 4px 6px;
-            }
-
-            .control-panel select, .control-panel button {
-                font-size: 10px;
-                padding: 3px 6px;
-                min-width: 70px;
-            }
-
-            .auto-quality-indicator {
+            .speed-indicator {
                 top: 10px;
                 left: 10px;
                 padding: 4px 8px;
@@ -385,76 +269,20 @@
             .buttons-container {
                 margin-top: 15px;
                 gap: 10px;
+                flex-direction: column;
+                align-items: center;
             }
 
             .copy-button, .open-button {
                 padding: 10px 20px;
                 font-size: 14px;
                 min-width: 140px;
-                flex: 1;
-                max-width: 200px;
-            }
-        }
-
-        @media (max-width: 480px) {
-            .quality-selector {
-                position: relative;
-                top: auto;
-                right: auto;
-                margin: 10px;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-            }
-
-            .streaming-controls {
-                position: relative;
-                top: auto;
-                right: auto;
-                margin: 10px;
-                justify-content: center;
-                flex-direction: row;
-                flex-wrap: wrap;
-            }
-
-            .auto-quality-indicator {
-                position: relative;
-                top: auto;
-                left: auto;
-                margin: 5px auto;
-                display: inline-flex;
-            }
-
-            .connection-status {
-                position: relative;
-                bottom: auto;
-                left: auto;
-                margin: 5px auto;
-                display: inline-flex;
-            }
-
-            .quality-info {
-                position: relative;
-                bottom: auto;
-                right: auto;
-                margin: 5px auto;
-                display: inline-block;
-                text-align: center;
-            }
-
-            .buttons-container {
-                flex-direction: column;
-                align-items: center;
-            }
-
-            .copy-button, .open-button {
                 width: 100%;
                 max-width: 280px;
-                margin-bottom: 8px;
             }
         }
 
-        /* Success message for copy actions */
+        /* Success message */
         .success-message {
             position: fixed;
             top: 20px;
@@ -484,11 +312,11 @@
             max-width: 600px;
         }
 
-        /* Loading state */
+        /* Loading optimization */
         .video-container.loading {
-            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background: linear-gradient(90deg, #333 25%, #444 50%, #333 75%);
             background-size: 200% 100%;
-            animation: loading 1.5s infinite;
+            animation: loading 1s infinite;
         }
 
         @keyframes loading {
@@ -500,52 +328,29 @@
 
 <body>
     <div class="video-container" id="video-container">
-        <!-- Quality Selector - YouTube Style -->
+        <!-- Fast Quality Selector -->
         <div class="quality-selector">
             <div class="quality-label">Quality</div>
             <select id="quality-select">
-                <option value="auto">Auto (Recommended)</option>
-                <option value="240p">240p (Data Saver)</option>
-                <option value="360p">360p (Mobile)</option>
+                <option value="auto">Auto (Fast)</option>
+                <option value="240p">240p (Ultra Fast)</option>
+                <option value="360p">360p (Fast)</option>
                 <option value="480p">480p (Standard)</option>
                 <option value="720p">720p (HD)</option>
                 <option value="1080p">1080p (Full HD)</option>
-                <option value="original">Original Quality</option>
+                <option value="original">Original</option>
             </select>
         </div>
 
-        <!-- Auto Quality Indicator -->
-        <div class="auto-quality-indicator" id="auto-quality-indicator">
-            AUTO 720p
-        </div>
-
-        <!-- Transcoding Progress -->
-        <div class="transcoding-progress" id="transcoding-progress">
-            <div class="transcoding-spinner"></div>
-            <div class="transcoding-text">Optimizing Video Quality</div>
-            <div class="transcoding-subtext">Preparing <span id="transcoding-quality">720p</span> stream...</div>
-        </div>
-
-        <!-- Streaming Controls -->
-        <div class="streaming-controls">
-            <div class="control-panel">
-                <select id="chunk-size-select" title="Chunk Size">
-                    <option value="32">32KB (2G)</option>
-                    <option value="64">64KB (3G)</option>
-                    <option value="128" selected>128KB (4G)</option>
-                    <option value="256">256KB (WiFi)</option>
-                    <option value="512">512KB (Fast)</option>
-                </select>
-            </div>
-            <div class="control-panel">
-                <button id="buffer-toggle" title="Toggle Buffer Mode">Smart Buffer</button>
-            </div>
+        <!-- Speed Indicator -->
+        <div class="speed-indicator fast" id="speed-indicator">
+            FAST STREAM
         </div>
 
         <!-- Connection Status -->
         <div class="connection-status" id="connection-status">
             <div class="connection-dot" id="connection-dot"></div>
-            <span id="connection-text">Optimizing...</span>
+            <span id="connection-text">Ready</span>
         </div>
 
         <!-- Quality Info -->
@@ -553,15 +358,12 @@
             Streaming: Auto
         </div>
 
-        <video id="my-player" class="video-js vjs-fluid" controls preload="metadata" data-setup='{}'>
+        <video id="my-player" class="video-js vjs-fluid" controls preload="none" data-setup='{}'>
             <source id="video-src" src="" type="video/mp4">
             </source>
             <p class="vjs-no-js">
                 To view this video please enable JavaScript, and consider upgrading to a
-                web browser that
-                <a href="https://videojs.com/html5-video-support/" target="_blank">
-                    supports HTML5 video
-                </a>
+                web browser that supports HTML5 video.
             </p>
         </video>
     </div>
@@ -581,177 +383,141 @@
         const videoContainer = document.getElementById('video-container');
         const videoSrc = document.getElementById('video-src');
         const qualitySelect = document.getElementById('quality-select');
-        const chunkSizeSelect = document.getElementById('chunk-size-select');
-        const bufferToggle = document.getElementById('buffer-toggle');
-        const autoQualityIndicator = document.getElementById('auto-quality-indicator');
-        const transcodingProgress = document.getElementById('transcoding-progress');
-        const transcodingQuality = document.getElementById('transcoding-quality');
+        const speedIndicator = document.getElementById('speed-indicator');
         const connectionStatus = document.getElementById('connection-status');
         const connectionDot = document.getElementById('connection-dot');
         const connectionText = document.getElementById('connection-text');
         const qualityInfo = document.getElementById('quality-info');
         
-        // Streaming configuration
+        // Fast streaming configuration
         let player;
         let currentQuality = 'auto';
-        let currentChunkSize = 128; // KB
-        let smartBufferMode = true;
-        let isTranscoding = false;
-        let autoQualityEnabled = true;
+        let streamingSpeed = 'fast';
         
         console.log('Download URL:', downloadUrl);
         
         if (downloadUrl) {
-            initializeMultiQualityPlayer();
+            initializeFastPlayer();
         } else {
             showError('No video URL provided. Please check the link and try again.');
         }
 
-        function initializeMultiQualityPlayer() {
-            // Set initial quality based on connection
-            detectOptimalQuality();
+        function initializeFastPlayer() {
+            // Detect optimal quality for fast streaming
+            detectFastQuality();
             
-            // Update video source with quality
+            // Update video source
             updateVideoSource();
             
-            // Add loading state
-            videoContainer.classList.add('loading');
-            
-            // Initialize Video.js player
+            // Initialize Video.js with fast settings
             player = videojs('my-player', {
                 fluid: true,
                 responsive: true,
-                playbackRates: [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2],
-                preload: 'metadata',
+                preload: 'none',  // No preload for instant start
                 html5: {
                     vhs: {
                         enableLowInitialPlaylist: true,
-                        smoothQualityChange: true,
+                        smoothQualityChange: false,  // Disable for speed
                         overrideNative: true,
                         useDevicePixelRatio: false,
-                        maxPlaylistRetries: 2,
-                        maxNetworkRetries: 2,
-                        segmentRequestTimeout: 15000,
-                        playlistRequestTimeout: 8000,
-                        goalBufferLength: getBufferLength(),
-                        maxGoalBufferLength: getBufferLength() * 2,
+                        maxPlaylistRetries: 1,  // Reduced retries
+                        maxNetworkRetries: 1,   // Reduced retries
+                        segmentRequestTimeout: 5000,  // Shorter timeout
+                        playlistRequestTimeout: 3000, // Shorter timeout
+                        goalBufferLength: 2,    // Very small buffer
+                        maxGoalBufferLength: 4, // Small max buffer
                         bufferBasedABR: false,
                         limitRenditionByPlayerDimensions: false
-                    },
-                    nativeVideoTracks: false,
-                    nativeAudioTracks: false,
-                    nativeTextTracks: false
+                    }
                 },
                 techOrder: ['html5'],
                 sources: [{
-                    src: getQualityVideoUrl(),
+                    src: getFastVideoUrl(),
                     type: 'video/mp4'
                 }],
-                liveui: false,
                 controls: true,
                 autoplay: false,
                 muted: false
             });
 
-            // Setup player events
+            // Setup fast player events
             player.ready(function() {
-                console.log('Multi-quality player ready');
-                setupPlayerEvents();
-                startQualityMonitoring();
+                console.log('Fast player ready');
+                setupFastPlayerEvents();
+                updateSpeedIndicator();
                 updateQualityDisplay();
             });
 
-            // Setup control event listeners
-            setupQualityControls();
+            // Setup quality controls
+            setupFastQualityControls();
         }
 
-        function setupPlayerEvents() {
-            // Loading events
+        function setupFastPlayerEvents() {
+            // Fast loading events
             player.on('loadstart', function() {
-                console.log('Load started');
+                console.log('Fast load started');
                 updateConnectionStatus('loading', 'Loading...');
-                videoContainer.classList.add('loading');
-                
-                // Show transcoding progress for non-original qualities
-                if (currentQuality !== 'original' && currentQuality !== 'auto') {
-                    showTranscodingProgress();
-                }
+                updateSpeedIndicator('fast');
             });
 
             player.on('loadedmetadata', function() {
-                console.log('Metadata loaded');
-                videoContainer.classList.remove('loading');
-                hideTranscodingProgress();
+                console.log('Metadata loaded - ready to play');
                 updateConnectionStatus('ready', 'Ready');
-                updateQualityDisplay();
+                updateSpeedIndicator('fast');
             });
 
             player.on('canplay', function() {
-                console.log('Can play');
+                console.log('Can play - streaming ready');
                 updateConnectionStatus('streaming', 'Streaming');
-                hideTranscodingProgress();
+                updateSpeedIndicator('fast');
             });
 
             player.on('waiting', function() {
-                console.log('Buffering');
-                updateConnectionStatus('buffering', 'Buffering');
+                console.log('Buffering - optimizing...');
+                updateConnectionStatus('buffering', 'Optimizing');
+                updateSpeedIndicator('medium');
                 
-                // Auto-optimize if smart buffer is enabled
-                if (smartBufferMode && autoQualityEnabled) {
-                    autoOptimizeQuality();
-                }
+                // Auto-optimize for speed
+                autoOptimizeForSpeed();
             });
 
             player.on('playing', function() {
-                console.log('Playing');
+                console.log('Playing smoothly');
                 updateConnectionStatus('streaming', 'Streaming');
+                updateSpeedIndicator('fast');
             });
 
             player.on('error', function() {
                 const error = player.error();
                 console.error('Player error:', error);
-                hideTranscodingProgress();
+                updateSpeedIndicator('slow');
                 
                 if (error && error.code === 4) {
-                    // Network error - try lower quality
-                    if (autoQualityEnabled) {
-                        autoDowngradeQuality();
-                    } else {
-                        showError('Network error. Try selecting a lower quality.');
+                    // Network error - switch to fastest quality
+                    if (currentQuality !== '240p') {
+                        changeQuality('240p');
+                        showNotification('Switched to 240p for better streaming');
                     }
                 } else {
-                    showError('Video playback error. Please try again.');
+                    showError('Playback error. Trying to optimize...');
+                    // Try to recover with lowest quality
+                    setTimeout(() => {
+                        changeQuality('240p');
+                    }, 1000);
                 }
             });
 
-            // Quality adaptation based on performance
+            // Monitor streaming performance
             player.on('progress', function() {
-                if (autoQualityEnabled) {
-                    monitorStreamingPerformance();
-                }
+                monitorStreamingSpeed();
             });
         }
 
-        function setupQualityControls() {
-            // Quality selector
+        function setupFastQualityControls() {
+            // Quality selector with instant switching
             qualitySelect.addEventListener('change', function() {
                 const newQuality = this.value;
                 changeQuality(newQuality);
-            });
-
-            // Chunk size control
-            chunkSizeSelect.addEventListener('change', function() {
-                currentChunkSize = parseInt(this.value);
-                updateVideoSource();
-                showNotification(`Chunk size: ${currentChunkSize}KB`);
-            });
-
-            // Smart buffer toggle
-            bufferToggle.addEventListener('click', function() {
-                smartBufferMode = !smartBufferMode;
-                this.textContent = smartBufferMode ? 'Smart Buffer' : 'Manual Buffer';
-                this.style.background = smartBufferMode ? 'rgba(76, 175, 80, 0.3)' : 'rgba(255, 152, 0, 0.3)';
-                showNotification(`Smart buffering ${smartBufferMode ? 'enabled' : 'disabled'}`);
             });
         }
 
@@ -762,20 +528,13 @@
             const wasPaused = player ? player.paused() : true;
             
             currentQuality = newQuality;
-            autoQualityEnabled = (newQuality === 'auto');
             
-            console.log(`Changing quality to: ${newQuality}`);
+            console.log(`Fast quality change to: ${newQuality}`);
             
-            // Show transcoding progress for non-original qualities
-            if (newQuality !== 'original' && newQuality !== 'auto') {
-                showTranscodingProgress();
-                transcodingQuality.textContent = newQuality;
-            }
-            
-            // Update video source
+            // Update video source immediately
             updateVideoSource();
             
-            // Restore playback position
+            // Restore playback position quickly
             if (player) {
                 player.ready(() => {
                     if (currentTime > 0) {
@@ -788,54 +547,46 @@
             }
             
             updateQualityDisplay();
-            showNotification(`Quality changed to: ${getQualityDisplayName(newQuality)}`);
+            updateSpeedIndicator('fast');
+            showNotification(`Quality: ${getQualityDisplayName(newQuality)}`);
         }
 
-        function detectOptimalQuality() {
-            // Auto-detect based on connection and device
+        function detectFastQuality() {
+            // Fast quality detection prioritizing speed
             const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
             const userAgent = navigator.userAgent.toLowerCase();
             const isMobile = /mobile|android|iphone|ipad/.test(userAgent);
             
-            let detectedQuality = '720p'; // Default
+            let detectedQuality = '480p'; // Default for speed
             
             if (connection) {
                 const effectiveType = connection.effectiveType;
                 const downlink = connection.downlink;
                 
                 if (effectiveType === 'slow-2g' || downlink < 0.5) {
-                    detectedQuality = '240p';
+                    detectedQuality = '240p';  // Ultra fast for slow connections
                 } else if (effectiveType === '2g' || downlink < 1) {
-                    detectedQuality = '360p';
+                    detectedQuality = '240p';  // Still ultra fast
                 } else if (effectiveType === '3g' || downlink < 2) {
-                    detectedQuality = '480p';
-                } else if (effectiveType === '4g' || downlink < 10) {
-                    detectedQuality = isMobile ? '720p' : '1080p';
+                    detectedQuality = '360p';  // Fast for 3G
+                } else if (effectiveType === '4g' || downlink < 5) {
+                    detectedQuality = '480p';  // Standard for 4G
                 } else {
-                    detectedQuality = '1080p';
+                    detectedQuality = '720p';  // HD for fast connections
                 }
             } else if (isMobile) {
-                detectedQuality = '480p';
+                detectedQuality = '360p';  // Mobile optimized
             }
             
-            // Set auto quality
-            if (currentQuality === 'auto') {
-                currentQuality = detectedQuality;
-                qualitySelect.value = 'auto';
-                
-                // Show auto indicator
-                autoQualityIndicator.textContent = `AUTO ${detectedQuality.toUpperCase()}`;
-                autoQualityIndicator.classList.add('show');
-                setTimeout(() => {
-                    autoQualityIndicator.classList.remove('show');
-                }, 3000);
-            }
+            currentQuality = detectedQuality;
+            qualitySelect.value = 'auto';
             
-            console.log(`Auto-detected quality: ${detectedQuality}`);
+            console.log(`Fast auto-detected quality: ${detectedQuality}`);
         }
 
-        function autoOptimizeQuality() {
-            if (!autoQualityEnabled || !player) return;
+        function autoOptimizeForSpeed() {
+            // Aggressive optimization for speed
+            if (!player) return;
             
             try {
                 const buffered = player.buffered();
@@ -845,59 +596,27 @@
                     const bufferEnd = buffered.end(buffered.length - 1);
                     const bufferHealth = bufferEnd - currentTime;
                     
-                    // Auto-adjust quality based on buffer health
-                    if (bufferHealth < 3) {
-                        // Poor buffer - downgrade quality
-                        autoDowngradeQuality();
-                    } else if (bufferHealth > 20) {
-                        // Excellent buffer - try upgrading quality
-                        autoUpgradeQuality();
+                    // Aggressive quality reduction for speed
+                    if (bufferHealth < 1) {
+                        // Very poor buffer - go to fastest quality
+                        if (currentQuality !== '240p') {
+                            changeQuality('240p');
+                            console.log('Auto-optimized to 240p for speed');
+                        }
+                    } else if (bufferHealth < 2 && currentQuality === '720p') {
+                        // Poor buffer - reduce quality
+                        changeQuality('480p');
+                        console.log('Auto-optimized to 480p for speed');
                     }
                 }
             } catch (e) {
-                console.log('Auto-optimization error:', e);
+                console.log('Speed optimization error:', e);
             }
         }
 
-        function autoDowngradeQuality() {
-            const qualityOrder = ['1080p', '720p', '480p', '360p', '240p'];
-            const currentIndex = qualityOrder.indexOf(currentQuality);
-            
-            if (currentIndex < qualityOrder.length - 1) {
-                const newQuality = qualityOrder[currentIndex + 1];
-                console.log(`Auto-downgrading from ${currentQuality} to ${newQuality}`);
-                changeQuality(newQuality);
-                
-                // Update auto indicator
-                autoQualityIndicator.textContent = `AUTO ${newQuality.toUpperCase()}`;
-                autoQualityIndicator.classList.add('show');
-                setTimeout(() => {
-                    autoQualityIndicator.classList.remove('show');
-                }, 3000);
-            }
-        }
-
-        function autoUpgradeQuality() {
-            const qualityOrder = ['240p', '360p', '480p', '720p', '1080p'];
-            const currentIndex = qualityOrder.indexOf(currentQuality);
-            
-            if (currentIndex < qualityOrder.length - 1) {
-                const newQuality = qualityOrder[currentIndex + 1];
-                console.log(`Auto-upgrading from ${currentQuality} to ${newQuality}`);
-                changeQuality(newQuality);
-                
-                // Update auto indicator
-                autoQualityIndicator.textContent = `AUTO ${newQuality.toUpperCase()}`;
-                autoQualityIndicator.classList.add('show');
-                setTimeout(() => {
-                    autoQualityIndicator.classList.remove('show');
-                }, 3000);
-            }
-        }
-
-        function monitorStreamingPerformance() {
-            // Monitor and adapt quality based on performance
-            if (!player || !autoQualityEnabled) return;
+        function monitorStreamingSpeed() {
+            // Monitor and update speed indicator
+            if (!player) return;
             
             try {
                 const buffered = player.buffered();
@@ -907,28 +626,37 @@
                     const bufferEnd = buffered.end(buffered.length - 1);
                     const bufferHealth = bufferEnd - currentTime;
                     
+                    // Update speed based on buffer health
+                    if (bufferHealth > 3) {
+                        updateSpeedIndicator('fast');
+                    } else if (bufferHealth > 1) {
+                        updateSpeedIndicator('medium');
+                    } else {
+                        updateSpeedIndicator('slow');
+                    }
+                    
                     // Update quality info
-                    qualityInfo.textContent = `Streaming: ${getQualityDisplayName(currentQuality)} (Buffer: ${bufferHealth.toFixed(1)}s)`;
+                    qualityInfo.textContent = `Streaming: ${getQualityDisplayName(currentQuality)} (${bufferHealth.toFixed(1)}s)`;
                 }
             } catch (e) {
-                console.log('Performance monitoring error:', e);
+                console.log('Speed monitoring error:', e);
             }
         }
 
-        function getQualityVideoUrl() {
+        function getFastVideoUrl() {
             if (!downloadUrl) return '';
             
             const url = new URL(downloadUrl);
             
-            // Add quality parameter
+            // Add quality parameter for fast streaming
             if (currentQuality !== 'original') {
                 url.searchParams.set('quality', currentQuality);
             }
             
-            // Add optimization parameters
-            url.searchParams.set('chunk_size', currentChunkSize * 1024);
-            url.searchParams.set('buffer_mode', smartBufferMode ? 'smart' : 'manual');
-            url.searchParams.set('optimize', 'true');
+            // Add fast streaming parameters
+            url.searchParams.set('fast_stream', 'true');
+            url.searchParams.set('buffer_size', 'small');
+            url.searchParams.set('priority', 'speed');
             url.searchParams.set('t', Date.now());
             
             return url.toString();
@@ -940,8 +668,8 @@
             const currentTime = player.currentTime();
             const wasPaused = player.paused();
             
-            const newUrl = getQualityVideoUrl();
-            console.log('Updating video source:', newUrl);
+            const newUrl = getFastVideoUrl();
+            console.log('Fast video source update:', newUrl);
             
             player.src({
                 src: newUrl,
@@ -958,29 +686,17 @@
             });
         }
 
-        function getBufferLength() {
-            // Adaptive buffer length based on quality
-            const bufferLengths = {
-                '240p': 5,
-                '360p': 8,
-                '480p': 10,
-                '720p': 15,
-                '1080p': 20,
-                'original': 15
+        function updateSpeedIndicator(speed = streamingSpeed) {
+            streamingSpeed = speed;
+            speedIndicator.className = `speed-indicator ${speed}`;
+            
+            const speedTexts = {
+                'fast': 'FAST STREAM',
+                'medium': 'OPTIMIZING',
+                'slow': 'BUFFERING'
             };
             
-            return bufferLengths[currentQuality] || 10;
-        }
-
-        function showTranscodingProgress() {
-            transcodingProgress.classList.add('show');
-            isTranscoding = true;
-            updateConnectionStatus('transcoding', 'Transcoding');
-        }
-
-        function hideTranscodingProgress() {
-            transcodingProgress.classList.remove('show');
-            isTranscoding = false;
+            speedIndicator.textContent = speedTexts[speed] || 'STREAMING';
         }
 
         function updateConnectionStatus(status, text) {
@@ -992,8 +708,7 @@
             const displayName = getQualityDisplayName(currentQuality);
             qualityInfo.textContent = `Streaming: ${displayName}`;
             
-            // Update quality selector if in auto mode
-            if (autoQualityEnabled) {
+            if (currentQuality === 'auto') {
                 qualitySelect.value = 'auto';
             } else {
                 qualitySelect.value = currentQuality;
@@ -1002,25 +717,16 @@
 
         function getQualityDisplayName(quality) {
             const names = {
-                'auto': 'Auto',
-                '240p': '240p (Data Saver)',
-                '360p': '360p (Mobile)',
+                'auto': 'Auto (Fast)',
+                '240p': '240p (Ultra Fast)',
+                '360p': '360p (Fast)',
                 '480p': '480p (Standard)',
                 '720p': '720p (HD)',
                 '1080p': '1080p (Full HD)',
-                'original': 'Original Quality'
+                'original': 'Original'
             };
             
             return names[quality] || quality;
-        }
-
-        function startQualityMonitoring() {
-            // Monitor every 3 seconds
-            setInterval(() => {
-                if (player && !player.paused()) {
-                    monitorStreamingPerformance();
-                }
-            }, 3000);
         }
 
         function showNotification(message) {
@@ -1043,20 +749,25 @@
                 setTimeout(() => {
                     notificationDiv.remove();
                 }, 300);
-            }, 3000);
+            }, 2000);
         }
 
         function showError(message) {
-            videoContainer.classList.remove('loading');
-            hideTranscodingProgress();
             const errorDiv = document.createElement('div');
             errorDiv.className = 'error-message';
             errorDiv.innerHTML = `
                 <strong>Streaming Error</strong><br>
                 ${message}<br><br>
-                <small>Try selecting a different quality or adjusting the chunk size.</small>
+                <small>Trying to optimize for your connection...</small>
             `;
             videoContainer.parentNode.insertBefore(errorDiv, videoContainer.nextSibling);
+            
+            // Auto-remove error after 5 seconds
+            setTimeout(() => {
+                if (errorDiv.parentNode) {
+                    errorDiv.remove();
+                }
+            }, 5000);
         }
 
         function copyTextToClipboard(text) {
@@ -1117,7 +828,7 @@
             }
         }
 
-        // Keyboard shortcuts for quality selection
+        // Fast keyboard shortcuts
         document.addEventListener('keydown', function(e) {
             if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') {
                 switch(e.key) {
@@ -1139,23 +850,11 @@
                     case '0':
                         changeQuality('auto');
                         break;
-                    case 'o':
-                        changeQuality('original');
-                        break;
                 }
             }
         });
 
-        // Handle orientation changes
-        window.addEventListener('orientationchange', function() {
-            setTimeout(function() {
-                if (player) {
-                    player.trigger('resize');
-                }
-            }, 500);
-        });
-
-        // Initialize on page load
+        // Initialize fast streaming
         window.addEventListener('load', function() {
             if (!downloadUrl) {
                 showError('No video URL provided. Please check the link and try again.');
