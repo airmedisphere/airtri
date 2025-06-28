@@ -83,6 +83,86 @@
             letter-spacing: 0.5px;
         }
 
+        /* Playback Speed Controls */
+        .speed-controls {
+            position: absolute;
+            top: 15px;
+            right: 150px;
+            z-index: 1000;
+            background: rgba(0, 0, 0, 0.9);
+            border-radius: 8px;
+            padding: 8px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .speed-label {
+            color: white;
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            text-align: center;
+        }
+
+        .speed-buttons {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+        }
+
+        .speed-btn {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            min-width: 35px;
+            text-align: center;
+            font-weight: 500;
+        }
+
+        .speed-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+
+        .speed-btn.active {
+            background: rgba(255, 0, 0, 0.8);
+            border-color: rgba(255, 0, 0, 1);
+            color: white;
+        }
+
+        .speed-btn.negative {
+            background: rgba(255, 152, 0, 0.8);
+            border-color: rgba(255, 152, 0, 1);
+        }
+
+        .speed-display {
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            min-width: 50px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .speed-reset {
+            background: rgba(76, 175, 80, 0.8);
+            border-color: rgba(76, 175, 80, 1);
+            color: white;
+            font-weight: 600;
+        }
+
         /* Speed Indicator */
         .speed-indicator {
             position: absolute;
@@ -115,6 +195,63 @@
             0% { opacity: 1; }
             50% { opacity: 0.8; }
             100% { opacity: 1; }
+        }
+
+        /* Playback Speed Overlay */
+        .playback-speed-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1001;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 20px 30px;
+            border-radius: 12px;
+            font-size: 24px;
+            font-weight: 600;
+            display: none;
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            text-align: center;
+            min-width: 120px;
+        }
+
+        .playback-speed-overlay.show {
+            display: block;
+            animation: speedChange 0.8s ease-out;
+        }
+
+        @keyframes speedChange {
+            0% { 
+                opacity: 0; 
+                transform: translate(-50%, -50%) scale(0.8);
+            }
+            50% { 
+                opacity: 1; 
+                transform: translate(-50%, -50%) scale(1.1);
+            }
+            100% { 
+                opacity: 1; 
+                transform: translate(-50%, -50%) scale(1);
+            }
+        }
+
+        .speed-overlay-text {
+            margin-bottom: 8px;
+        }
+
+        .speed-overlay-value {
+            font-size: 32px;
+            color: #ff4444;
+        }
+
+        .speed-overlay-value.negative {
+            color: #ff9800;
+        }
+
+        .speed-overlay-value.normal {
+            color: #4caf50;
         }
 
         /* Connection Status */
@@ -245,6 +382,25 @@
                 min-width: 100px;
             }
 
+            .speed-controls {
+                top: 10px;
+                right: 120px;
+                padding: 6px;
+                gap: 6px;
+            }
+
+            .speed-btn {
+                padding: 3px 6px;
+                font-size: 10px;
+                min-width: 30px;
+            }
+
+            .speed-display {
+                padding: 3px 6px;
+                font-size: 11px;
+                min-width: 45px;
+            }
+
             .speed-indicator {
                 top: 10px;
                 left: 10px;
@@ -279,6 +435,60 @@
                 min-width: 140px;
                 width: 100%;
                 max-width: 280px;
+            }
+
+            .playback-speed-overlay {
+                padding: 15px 20px;
+                font-size: 20px;
+            }
+
+            .speed-overlay-value {
+                font-size: 28px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .speed-controls {
+                position: relative;
+                top: auto;
+                right: auto;
+                margin: 10px;
+                justify-content: center;
+            }
+
+            .quality-selector {
+                position: relative;
+                top: auto;
+                right: auto;
+                margin: 10px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .speed-indicator {
+                position: relative;
+                top: auto;
+                left: auto;
+                margin: 5px auto;
+                display: inline-flex;
+            }
+
+            .connection-status {
+                position: relative;
+                bottom: auto;
+                left: auto;
+                margin: 5px auto;
+                display: inline-flex;
+            }
+
+            .quality-info {
+                position: relative;
+                bottom: auto;
+                right: auto;
+                margin: 5px auto;
+                display: inline-block;
+                text-align: center;
             }
         }
 
@@ -342,9 +552,33 @@
             </select>
         </div>
 
+        <!-- Playback Speed Controls -->
+        <div class="speed-controls">
+            <div class="speed-label">Playback Speed</div>
+            <div class="speed-buttons">
+                <button class="speed-btn negative" data-speed="-0.25">-0.25x</button>
+                <button class="speed-btn" data-speed="0.25">0.25x</button>
+                <button class="speed-btn" data-speed="0.5">0.5x</button>
+                <button class="speed-btn" data-speed="0.75">0.75x</button>
+                <button class="speed-btn speed-reset active" data-speed="1">1x</button>
+                <button class="speed-btn" data-speed="1.25">1.25x</button>
+                <button class="speed-btn" data-speed="1.5">1.5x</button>
+                <button class="speed-btn" data-speed="2">2x</button>
+                <button class="speed-btn" data-speed="3">3x</button>
+                <button class="speed-btn" data-speed="4">4x</button>
+            </div>
+            <div class="speed-display" id="speed-display">1.00x</div>
+        </div>
+
         <!-- Speed Indicator -->
         <div class="speed-indicator fast" id="speed-indicator">
             FAST STREAM
+        </div>
+
+        <!-- Playback Speed Overlay -->
+        <div class="playback-speed-overlay" id="playback-speed-overlay">
+            <div class="speed-overlay-text">Speed</div>
+            <div class="speed-overlay-value" id="speed-overlay-value">1.00x</div>
         </div>
 
         <!-- Connection Status -->
@@ -388,11 +622,17 @@
         const connectionDot = document.getElementById('connection-dot');
         const connectionText = document.getElementById('connection-text');
         const qualityInfo = document.getElementById('quality-info');
+        const speedDisplay = document.getElementById('speed-display');
+        const playbackSpeedOverlay = document.getElementById('playback-speed-overlay');
+        const speedOverlayValue = document.getElementById('speed-overlay-value');
         
         // Fast streaming configuration
         let player;
         let currentQuality = 'auto';
         let streamingSpeed = 'fast';
+        let currentPlaybackSpeed = 1.0;
+        let isReversePlaying = false;
+        let reverseInterval = null;
         
         console.log('Download URL:', downloadUrl);
         
@@ -414,6 +654,7 @@
                 fluid: true,
                 responsive: true,
                 preload: 'none',  // No preload for instant start
+                playbackRates: [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4], // Built-in rates
                 html5: {
                     vhs: {
                         enableLowInitialPlaylist: true,
@@ -444,8 +685,10 @@
             player.ready(function() {
                 console.log('Fast player ready');
                 setupFastPlayerEvents();
+                setupPlaybackSpeedControls();
                 updateSpeedIndicator();
                 updateQualityDisplay();
+                updatePlaybackSpeedDisplay();
             });
 
             // Setup quality controls
@@ -511,6 +754,155 @@
             player.on('progress', function() {
                 monitorStreamingSpeed();
             });
+
+            // Handle playback rate changes
+            player.on('ratechange', function() {
+                const rate = player.playbackRate();
+                if (rate !== currentPlaybackSpeed && rate > 0) {
+                    currentPlaybackSpeed = rate;
+                    updatePlaybackSpeedDisplay();
+                    updateSpeedButtons();
+                }
+            });
+        }
+
+        function setupPlaybackSpeedControls() {
+            // Setup speed control buttons
+            const speedButtons = document.querySelectorAll('.speed-btn');
+            
+            speedButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const speed = parseFloat(this.dataset.speed);
+                    setPlaybackSpeed(speed);
+                });
+            });
+        }
+
+        function setPlaybackSpeed(speed) {
+            if (!player) return;
+            
+            console.log(`Setting playback speed to: ${speed}x`);
+            
+            // Stop any reverse playback
+            stopReversePlayback();
+            
+            if (speed < 0) {
+                // Handle negative speeds (reverse playback)
+                startReversePlayback(Math.abs(speed));
+            } else {
+                // Handle positive speeds
+                currentPlaybackSpeed = speed;
+                player.playbackRate(speed);
+                isReversePlaying = false;
+            }
+            
+            updatePlaybackSpeedDisplay();
+            updateSpeedButtons();
+            showSpeedOverlay(speed);
+            
+            // Show notification
+            const speedText = speed < 0 ? `${speed}x (Reverse)` : `${speed}x`;
+            showNotification(`Playback speed: ${speedText}`);
+        }
+
+        function startReversePlayback(speed) {
+            if (!player) return;
+            
+            console.log(`Starting reverse playback at ${speed}x`);
+            
+            isReversePlaying = true;
+            currentPlaybackSpeed = -speed;
+            
+            // Pause the video
+            player.pause();
+            
+            // Calculate step size based on speed
+            const stepSize = speed * 0.1; // 0.1 second steps adjusted by speed
+            
+            // Start reverse interval
+            reverseInterval = setInterval(() => {
+                if (!player || player.paused() === false) {
+                    // If video starts playing normally, stop reverse
+                    stopReversePlayback();
+                    return;
+                }
+                
+                const currentTime = player.currentTime();
+                const newTime = Math.max(0, currentTime - stepSize);
+                
+                if (newTime <= 0) {
+                    // Reached beginning, stop reverse
+                    player.currentTime(0);
+                    stopReversePlayback();
+                    return;
+                }
+                
+                player.currentTime(newTime);
+            }, 100); // Update every 100ms for smooth reverse
+        }
+
+        function stopReversePlayback() {
+            if (reverseInterval) {
+                clearInterval(reverseInterval);
+                reverseInterval = null;
+            }
+            
+            if (isReversePlaying) {
+                isReversePlaying = false;
+                // Reset to normal speed if we were in reverse
+                if (currentPlaybackSpeed < 0) {
+                    currentPlaybackSpeed = 1.0;
+                    if (player) {
+                        player.playbackRate(1.0);
+                    }
+                    updatePlaybackSpeedDisplay();
+                    updateSpeedButtons();
+                }
+            }
+        }
+
+        function updatePlaybackSpeedDisplay() {
+            const displaySpeed = Math.abs(currentPlaybackSpeed);
+            const speedText = currentPlaybackSpeed < 0 ? 
+                `-${displaySpeed.toFixed(2)}x` : 
+                `${displaySpeed.toFixed(2)}x`;
+            
+            speedDisplay.textContent = speedText;
+        }
+
+        function updateSpeedButtons() {
+            const speedButtons = document.querySelectorAll('.speed-btn');
+            
+            speedButtons.forEach(button => {
+                const buttonSpeed = parseFloat(button.dataset.speed);
+                
+                if (buttonSpeed === currentPlaybackSpeed) {
+                    button.classList.add('active');
+                } else {
+                    button.classList.remove('active');
+                }
+            });
+        }
+
+        function showSpeedOverlay(speed) {
+            const speedText = speed < 0 ? `${speed}x` : `${speed}x`;
+            speedOverlayValue.textContent = speedText;
+            
+            // Update overlay styling based on speed
+            speedOverlayValue.className = 'speed-overlay-value';
+            if (speed < 0) {
+                speedOverlayValue.classList.add('negative');
+            } else if (speed === 1) {
+                speedOverlayValue.classList.add('normal');
+            }
+            
+            // Show overlay
+            playbackSpeedOverlay.classList.add('show');
+            
+            // Hide overlay after 1.5 seconds
+            setTimeout(() => {
+                playbackSpeedOverlay.classList.remove('show');
+            }, 1500);
         }
 
         function setupFastQualityControls() {
@@ -526,6 +918,7 @@
             
             const currentTime = player ? player.currentTime() : 0;
             const wasPaused = player ? player.paused() : true;
+            const currentSpeed = currentPlaybackSpeed;
             
             currentQuality = newQuality;
             
@@ -534,12 +927,20 @@
             // Update video source immediately
             updateVideoSource();
             
-            // Restore playback position quickly
+            // Restore playback position and speed quickly
             if (player) {
                 player.ready(() => {
                     if (currentTime > 0) {
                         player.currentTime(currentTime);
                     }
+                    
+                    // Restore playback speed
+                    if (currentSpeed !== 1.0 && currentSpeed > 0) {
+                        setTimeout(() => {
+                            player.playbackRate(currentSpeed);
+                        }, 100);
+                    }
+                    
                     if (!wasPaused) {
                         player.play().catch(e => console.log('Autoplay prevented:', e));
                     }
@@ -635,8 +1036,10 @@
                         updateSpeedIndicator('slow');
                     }
                     
-                    // Update quality info
-                    qualityInfo.textContent = `Streaming: ${getQualityDisplayName(currentQuality)} (${bufferHealth.toFixed(1)}s)`;
+                    // Update quality info with playback speed
+                    const speedInfo = isReversePlaying ? ' (Reverse)' : 
+                        (currentPlaybackSpeed !== 1.0 ? ` (${currentPlaybackSpeed}x)` : '');
+                    qualityInfo.textContent = `Streaming: ${getQualityDisplayName(currentQuality)} (${bufferHealth.toFixed(1)}s)${speedInfo}`;
                 }
             } catch (e) {
                 console.log('Speed monitoring error:', e);
@@ -667,9 +1070,13 @@
             
             const currentTime = player.currentTime();
             const wasPaused = player.paused();
+            const currentSpeed = currentPlaybackSpeed;
             
             const newUrl = getFastVideoUrl();
             console.log('Fast video source update:', newUrl);
+            
+            // Stop reverse playback during source change
+            stopReversePlayback();
             
             player.src({
                 src: newUrl,
@@ -680,6 +1087,14 @@
                 if (currentTime > 0) {
                     player.currentTime(currentTime);
                 }
+                
+                // Restore playback speed
+                if (currentSpeed > 0 && currentSpeed !== 1.0) {
+                    setTimeout(() => {
+                        player.playbackRate(currentSpeed);
+                    }, 100);
+                }
+                
                 if (!wasPaused) {
                     player.play().catch(e => console.log('Autoplay prevented:', e));
                 }
@@ -828,10 +1243,11 @@
             }
         }
 
-        // Fast keyboard shortcuts
+        // Enhanced keyboard shortcuts including playback speed
         document.addEventListener('keydown', function(e) {
             if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') {
                 switch(e.key) {
+                    // Quality shortcuts
                     case '1':
                         changeQuality('240p');
                         break;
@@ -850,7 +1266,80 @@
                     case '0':
                         changeQuality('auto');
                         break;
+                    
+                    // Playback speed shortcuts
+                    case 'q':
+                        setPlaybackSpeed(0.25);
+                        break;
+                    case 'w':
+                        setPlaybackSpeed(0.5);
+                        break;
+                    case 'e':
+                        setPlaybackSpeed(0.75);
+                        break;
+                    case 'r':
+                        setPlaybackSpeed(1.0);
+                        break;
+                    case 't':
+                        setPlaybackSpeed(1.25);
+                        break;
+                    case 'y':
+                        setPlaybackSpeed(1.5);
+                        break;
+                    case 'u':
+                        setPlaybackSpeed(2.0);
+                        break;
+                    case 'i':
+                        setPlaybackSpeed(3.0);
+                        break;
+                    case 'o':
+                        setPlaybackSpeed(4.0);
+                        break;
+                    
+                    // Reverse playback shortcut
+                    case 'z':
+                        setPlaybackSpeed(-0.25);
+                        break;
+                    
+                    // Speed up/down with arrow keys + shift
+                    case 'ArrowUp':
+                        if (e.shiftKey) {
+                            e.preventDefault();
+                            increaseSpeed();
+                        }
+                        break;
+                    case 'ArrowDown':
+                        if (e.shiftKey) {
+                            e.preventDefault();
+                            decreaseSpeed();
+                        }
+                        break;
                 }
+            }
+        });
+
+        function increaseSpeed() {
+            const speeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];
+            const currentIndex = speeds.indexOf(Math.abs(currentPlaybackSpeed));
+            
+            if (currentIndex < speeds.length - 1) {
+                setPlaybackSpeed(speeds[currentIndex + 1]);
+            }
+        }
+
+        function decreaseSpeed() {
+            const speeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];
+            const currentIndex = speeds.indexOf(Math.abs(currentPlaybackSpeed));
+            
+            if (currentIndex > 0) {
+                setPlaybackSpeed(speeds[currentIndex - 1]);
+            }
+        }
+
+        // Handle page visibility change to stop reverse playback when tab is hidden
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden && isReversePlaying) {
+                stopReversePlayback();
             }
         });
 
@@ -859,6 +1348,11 @@
             if (!downloadUrl) {
                 showError('No video URL provided. Please check the link and try again.');
             }
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', function() {
+            stopReversePlayback();
         });
     </script>
 </body>
